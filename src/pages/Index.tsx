@@ -1,5 +1,6 @@
 import { useState, useRef, ChangeEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { uploadImage } from "@/lib/uploadImage";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -76,19 +77,22 @@ const Index = () => {
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        if (event.target?.result) {
-          await generateSession(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-    } else if (file) {
+      const publicUrl = await uploadImage(file);
+      if (publicUrl) {
+        await generateSession(publicUrl);
+      } else {
         toast({
-            variant: "destructive",
-            title: "Invalid File Type",
-            description: "Please select an image file.",
+          variant: "destructive",
+          title: "Upload Failed",
+          description: "Could not upload image. Please try again.",
         });
+      }
+    } else if (file) {
+      toast({
+        variant: "destructive",
+        title: "Invalid File Type",
+        description: "Please select an image file.",
+      });
     }
   };
 
