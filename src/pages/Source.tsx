@@ -8,15 +8,28 @@ interface SourceData {
 
 const Source = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
+  // Log the sessionId to see if it's being correctly extracted from the URL
+  console.log("Source.tsx: sessionId from URL params:", sessionId);
+
   const storageKey = sessionId ? `browser-source-${sessionId}` : undefined;
+  // Log the storageKey that will be used
+  console.log("Source.tsx: storageKey:", storageKey);
 
   const getStorageData = (): SourceData => {
-    if (!storageKey) return { imageUrl: null, isRevealed: false };
+    if (!storageKey) {
+      console.log("Source.tsx: storageKey is undefined, returning default data.");
+      return { imageUrl: null, isRevealed: false };
+    }
     try {
       const data = localStorage.getItem(storageKey);
-      return data ? JSON.parse(data) : { imageUrl: null, isRevealed: false };
+      // Log the raw data retrieved from localStorage
+      console.log("Source.tsx: Raw data from localStorage:", data);
+      const parsedData = data ? JSON.parse(data) : { imageUrl: null, isRevealed: false };
+      // Log the parsed data
+      console.log("Source.tsx: Parsed data:", parsedData);
+      return parsedData;
     } catch (error) {
-      console.error("Failed to parse storage data:", error);
+      console.error("Source.tsx: Failed to parse storage data:", error);
       return { imageUrl: null, isRevealed: false };
     }
   };
@@ -28,46 +41,49 @@ const Source = () => {
 
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === storageKey) {
+        console.log("Source.tsx: Storage event detected for key:", event.key);
         setData(getStorageData());
       }
     };
 
-    // Listen for storage events (for changes from other tabs/windows/OBS)
     window.addEventListener("storage", handleStorageChange);
 
-    // Also poll localStorage periodically as a fallback for environments where storage events might be unreliable (e.g., some OBS versions)
     const intervalId = setInterval(() => {
       const currentData = getStorageData();
-      // Use a functional update to setData to avoid needing 'data' in useEffect dependencies
-      // This ensures we always compare against the *latest* state without re-running the effect
       setData(prevData => {
         if (currentData.imageUrl !== prevData.imageUrl || currentData.isRevealed !== prevData.isRevealed) {
+          console.log("Source.tsx: Polling detected change, updating state.");
           return currentData;
         }
-        return prevData; // No change, return previous state
+        return prevData;
       });
-    }, 1000); // Check every 1 second
+    }, 1000);
 
     // Initial check on mount
+    console.log("Source.tsx: Initial check on mount.");
     setData(getStorageData());
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
-      clearInterval(intervalId); // Clean up the interval
+      clearInterval(intervalId);
     };
   }, [storageKey]);
 
+  // Log the final data state before rendering
+  console.log("Source.tsx: Current data state for rendering:", data);
+
   if (!data.imageUrl) {
-    // This is a transparent page, so we return null to keep the OBS source clean.
+    console.log("Source.tsx: No imageUrl found, returning null.");
     return null;
   }
 
+  console.log("Source.tsx: Rendering image with URL:", data.imageUrl);
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-transparent p-4">
       <img
         src={data.imageUrl}
         alt="Browser Source"
-        className="block max-w-full max-h-full object-contain" // Simplified for debugging
+        className="block max-w-full max-h-full object-contain"
       />
     </div>
   );
