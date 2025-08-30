@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
 
 interface SourceData {
   imageUrl: string | null;
@@ -8,52 +9,46 @@ interface SourceData {
 
 const Source = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const storageKey = sessionId ? `browser-source-${sessionId}` : undefined;
 
-  const getStorageData = (): SourceData => {
-    if (!storageKey) {
+  const fetchData = async (): Promise<SourceData> => {
+    if (!sessionId) {
       return { imageUrl: null, isRevealed: false };
     }
-    try {
-      const data = localStorage.getItem(storageKey);
-      const parsedData = data ? JSON.parse(data) : { imageUrl: null, isRevealed: false };
-      return parsedData;
-    } catch (error) {
-      console.error("Failed to parse storage data:", error);
+    const { data, error } = await supabase
+      .from("sessions")
+      .select("image_url, is_revealed")
+      .eq("id", sessionId)
+      .single();
+    if (error) {
+      console.error("Failed to fetch session data:", error);
       return { imageUrl: null, isRevealed: false };
     }
+    return {
+      imageUrl: data?.image_url ?? null,
+      isRevealed: data?.is_revealed ?? false,
+    };
   };
 
-  const [data, setData] = useState<SourceData>(getStorageData);
+  const [data, setData] = useState<SourceData>({ imageUrl: null, isRevealed: false });
 
   useEffect(() => {
-    if (!storageKey) return;
+    let isMounted = true;
 
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === storageKey) {
-        setData(getStorageData());
+    const load = async () => {
+      const fetched = await fetchData();
+      if (isMounted) {
+        setData(fetched);
       }
     };
 
-    window.addEventListener("storage", handleStorageChange);
-
-    const intervalId = setInterval(() => {
-      const currentData = getStorageData();
-      setData(prevData => {
-        if (currentData.imageUrl !== prevData.imageUrl || currentData.isRevealed !== prevData.isRevealed) {
-          return currentData;
-        }
-        return prevData;
-      });
-    }, 1000);
-
-    setData(getStorageData());
+    load();
+    const intervalId = setInterval(load, 1000);
 
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
+      isMounted = false;
       clearInterval(intervalId);
     };
-  }, [storageKey]);
+  }, [sessionId]);
 
   if (!data.imageUrl) {
     return null;

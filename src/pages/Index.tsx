@@ -1,4 +1,5 @@
 import { useState, useRef, ChangeEvent } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,23 +23,25 @@ const Index = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const storageKey = sessionId ? `browser-source-${sessionId}` : null;
-
-  const generateSession = (newImageUrl: string) => {
+  const generateSession = async (newImageUrl: string) => {
     const newSessionId = Math.random().toString(36).substring(2, 10);
     setSessionId(newSessionId);
     setImageUrl(newImageUrl);
     setIsRevealed(false);
 
-    const data = { imageUrl: newImageUrl, isRevealed: false };
-    localStorage.setItem(`browser-source-${newSessionId}`, JSON.stringify(data));
+    const { error } = await supabase
+      .from("sessions")
+      .upsert({ id: newSessionId, image_url: newImageUrl, is_revealed: false });
+    if (error) {
+      console.error("Failed to create session:", error);
+    }
   };
 
-  const handleUrlSubmit = () => {
+  const handleUrlSubmit = async () => {
     if (inputUrl.trim()) {
       try {
         new URL(inputUrl.trim());
-        generateSession(inputUrl.trim());
+        await generateSession(inputUrl.trim());
       } catch (_) {
         toast({
           variant: "destructive",
@@ -49,13 +52,13 @@ const Index = () => {
     }
   };
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         if (event.target?.result) {
-          generateSession(event.target.result as string);
+          await generateSession(event.target.result as string);
         }
       };
       reader.readAsDataURL(file);
@@ -68,11 +71,16 @@ const Index = () => {
     }
   };
 
-  const toggleReveal = (checked: boolean) => {
-    if (storageKey && imageUrl) {
+  const toggleReveal = async (checked: boolean) => {
+    if (sessionId && imageUrl) {
       setIsRevealed(checked);
-      const data = { imageUrl, isRevealed: checked };
-      localStorage.setItem(storageKey, JSON.stringify(data));
+      const { error } = await supabase
+        .from("sessions")
+        .update({ is_revealed: checked })
+        .eq("id", sessionId);
+      if (error) {
+        console.error("Failed to update session:", error);
+      }
     }
   };
 
@@ -194,7 +202,10 @@ const Index = () => {
         </CardContent>
         <CardFooter className="justify-center pt-6">
             {sessionId && (
-                <Button variant="link" onClick={() => {
+                <Button variant="link" onClick={async () => {
+                    if (sessionId) {
+                        await supabase.from("sessions").delete().eq("id", sessionId);
+                    }
                     setSessionId(null);
                     setImageUrl("");
                     setInputUrl("");
