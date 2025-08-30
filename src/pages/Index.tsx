@@ -16,6 +16,7 @@ import { Copy, Upload } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 const Index = () => {
+  const sb = supabase;
   const [imageUrl, setImageUrl] = useState<string>("");
   const [inputUrl, setInputUrl] = useState<string>("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -23,13 +24,33 @@ const Index = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  if (!sb) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 md:p-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuration Error</CardTitle>
+            <CardDescription>
+              Supabase environment variables are missing. Set
+              <code className="font-mono"> VITE_SUPABASE_URL </code>
+              and
+              <code className="font-mono"> VITE_SUPABASE_ANON_KEY </code>.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  const client = sb as NonNullable<typeof sb>;
+
   const generateSession = async (newImageUrl: string) => {
     const newSessionId = Math.random().toString(36).substring(2, 10);
     setSessionId(newSessionId);
     setImageUrl(newImageUrl);
     setIsRevealed(false);
 
-    const { error } = await supabase
+    const { error } = await client
       .from("sessions")
       .upsert({ id: newSessionId, image_url: newImageUrl, is_revealed: false });
     if (error) {
@@ -74,7 +95,7 @@ const Index = () => {
   const toggleReveal = async (checked: boolean) => {
     if (sessionId && imageUrl) {
       setIsRevealed(checked);
-      const { error } = await supabase
+      const { error } = await client
         .from("sessions")
         .update({ is_revealed: checked })
         .eq("id", sessionId);
@@ -204,7 +225,7 @@ const Index = () => {
             {sessionId && (
                 <Button variant="link" onClick={async () => {
                     if (sessionId) {
-                        await supabase.from("sessions").delete().eq("id", sessionId);
+                        await client.from("sessions").delete().eq("id", sessionId);
                     }
                     setSessionId(null);
                     setImageUrl("");
