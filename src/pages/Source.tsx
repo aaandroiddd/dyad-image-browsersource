@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 interface SourceData {
   imageUrl: string | null;
@@ -9,35 +15,29 @@ interface SourceData {
 
 const Source = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
-
-  const fetchData = async (): Promise<SourceData> => {
-    if (!sessionId) {
-      return { imageUrl: null, isRevealed: false };
-    }
-    const { data, error } = await supabase
-      .from("sessions")
-      .select("image_url, is_revealed")
-      .eq("id", sessionId)
-      .single();
-    if (error) {
-      console.error("Failed to fetch session data:", error);
-      return { imageUrl: null, isRevealed: false };
-    }
-    return {
-      imageUrl: data?.image_url ?? null,
-      isRevealed: data?.is_revealed ?? false,
-    };
-  };
-
+  const sb = supabase;
   const [data, setData] = useState<SourceData>({ imageUrl: null, isRevealed: false });
 
   useEffect(() => {
+    if (!sb || !sessionId) return;
+
     let isMounted = true;
 
     const load = async () => {
-      const fetched = await fetchData();
+      const { data, error } = await sb
+        .from("sessions")
+        .select("image_url, is_revealed")
+        .eq("id", sessionId)
+        .single();
+      if (error) {
+        console.error("Failed to fetch session data:", error);
+        return;
+      }
       if (isMounted) {
-        setData(fetched);
+        setData({
+          imageUrl: data?.image_url ?? null,
+          isRevealed: data?.is_revealed ?? false,
+        });
       }
     };
 
@@ -48,7 +48,22 @@ const Source = () => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [sessionId]);
+  }, [sb, sessionId]);
+
+  if (!sb) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuration Error</CardTitle>
+            <CardDescription>
+              Supabase environment variables are missing.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   if (!data.imageUrl) {
     return null;
