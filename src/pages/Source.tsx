@@ -32,11 +32,28 @@ const Source = () => {
       }
     };
 
+    // Listen for storage events (for changes from other tabs/windows/OBS)
     window.addEventListener("storage", handleStorageChange);
-    setData(getStorageData()); // Re-check on mount
+
+    // Also poll localStorage periodically as a fallback for environments where storage events might be unreliable (e.g., some OBS versions)
+    const intervalId = setInterval(() => {
+      const currentData = getStorageData();
+      // Use a functional update to setData to avoid needing 'data' in useEffect dependencies
+      // This ensures we always compare against the *latest* state without re-running the effect
+      setData(prevData => {
+        if (currentData.imageUrl !== prevData.imageUrl || currentData.isRevealed !== prevData.isRevealed) {
+          return currentData;
+        }
+        return prevData; // No change, return previous state
+      });
+    }, 1000); // Check every 1 second
+
+    // Initial check on mount
+    setData(getStorageData());
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
+      clearInterval(intervalId); // Clean up the interval
     };
   }, [storageKey]);
 
