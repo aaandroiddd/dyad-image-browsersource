@@ -71,7 +71,7 @@ const Source = () => {
           data.isRevealed
             ? "opacity-100 scale-100"
             : "opacity-0 scale-95"
-        }`}
+        } ${!data.isRevealed ? "hidden" : ""}`} // Added 'hidden' class for unrevealed state
       />
     </div>
   );
