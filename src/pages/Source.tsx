@@ -67,11 +67,7 @@ const Source = () => {
       <img
         src={data.imageUrl}
         alt="Browser Source"
-        className={`block max-w-full max-h-full object-contain transition-all duration-300 ease-in-out ${
-          data.isRevealed
-            ? "opacity-100 scale-100"
-            : "opacity-0 scale-95"
-        } ${!data.isRevealed ? "hidden" : ""}`} // Added 'hidden' class for unrevealed state
+        className="block max-w-full max-h-full object-contain" // Simplified for debugging
       />
     </div>
   );
