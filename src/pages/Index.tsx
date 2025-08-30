@@ -46,16 +46,24 @@ const Index = () => {
 
   const generateSession = async (newImageUrl: string) => {
     const newSessionId = Math.random().toString(36).substring(2, 10);
-    setSessionId(newSessionId);
-    setImageUrl(newImageUrl);
-    setIsRevealed(false);
 
     const { error } = await client
       .from("sessions")
       .upsert({ id: newSessionId, image_url: newImageUrl, is_revealed: false });
+
     if (error) {
       console.error("Failed to create session:", error);
+      toast({
+        variant: "destructive",
+        title: "Session Error",
+        description: "Failed to create session. Please try again.",
+      });
+      return;
     }
+
+    setSessionId(newSessionId);
+    setImageUrl(newImageUrl);
+    setIsRevealed(false);
   };
 
   const handleUrlSubmit = async () => {
