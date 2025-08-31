@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -70,15 +71,14 @@ const Source = () => {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-transparent p-4">
-      <img
+    <div className="fixed inset-0 flex items-center justify-center bg-background p-4">
+      <motion.img
         src={data.imageUrl}
         alt="Browser Source"
-        className={`block max-w-full max-h-full object-contain transition-all duration-300 ease-in-out ${
-          data.isRevealed
-            ? "opacity-100 scale-100"
-            : "opacity-0 scale-95"
-        }`}
+        className="block max-w-full max-h-full object-contain"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: data.isRevealed ? 1 : 0, scale: data.isRevealed ? 1 : 0.95 }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
       />
     </div>
   );
