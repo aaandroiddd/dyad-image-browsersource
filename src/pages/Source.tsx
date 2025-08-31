@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { sectionVariants } from "@/utils/animations";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -53,15 +54,22 @@ const Source = () => {
 
   if (!sb) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Configuration Error</CardTitle>
-            <CardDescription>
-              Supabase environment variables are missing.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center p-4 md:p-8 bg-background text-foreground">
+        <motion.div
+          variants={sectionVariants}
+          initial="hidden"
+          animate="visible"
+          whileHover="hover"
+        >
+          <Card className="bg-card border border-primary/50 shadow-lg shadow-[0_0_15px_hsl(var(--glow)/0.2)]">
+            <CardHeader>
+              <CardTitle>Configuration Error</CardTitle>
+              <CardDescription>
+                Supabase environment variables are missing.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </motion.div>
       </div>
     );
   }
