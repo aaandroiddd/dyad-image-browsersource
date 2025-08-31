@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { sectionVariants } from "@/utils/animations";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const Index = () => {
   const sb = supabase;
@@ -212,7 +213,10 @@ const Index = () => {
   };
 
   return (
-      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 md:p-8">
+    <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 md:p-8 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <motion.div
         variants={sectionVariants}
         initial="hidden"
