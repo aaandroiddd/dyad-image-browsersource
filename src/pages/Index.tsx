@@ -1,4 +1,5 @@
 import { useState, useRef, ChangeEvent } from "react";
+import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadImage } from "@/lib/uploadImage";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,12 @@ const Index = () => {
 
   if (!sb) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 md:p-8">
+      <motion.div
+        className="min-h-screen flex items-center justify-center p-4 md:p-8"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
         <Card>
           <CardHeader>
             <CardTitle>Configuration Error</CardTitle>
@@ -49,7 +55,7 @@ const Index = () => {
             </CardDescription>
           </CardHeader>
         </Card>
-      </div>
+      </motion.div>
     );
   }
 
@@ -203,7 +209,12 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 md:p-8">
+    <motion.div
+      className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 md:p-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
       <Card className="w-full max-w-2xl">
         <CardHeader>
           <CardTitle className="text-3xl">Image Browser Source</CardTitle>
@@ -380,7 +391,7 @@ const Index = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 };
 

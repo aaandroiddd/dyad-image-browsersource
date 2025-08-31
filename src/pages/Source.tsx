@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import {
   Card,
@@ -52,7 +53,12 @@ const Source = () => {
 
   if (!sb) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <motion.div
+        className="min-h-screen flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
         <Card>
           <CardHeader>
             <CardTitle>Configuration Error</CardTitle>
@@ -61,7 +67,7 @@ const Source = () => {
             </CardDescription>
           </CardHeader>
         </Card>
-      </div>
+      </motion.div>
     );
   }
 
@@ -70,7 +76,12 @@ const Source = () => {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-transparent p-4">
+    <motion.div
+      className="fixed inset-0 flex items-center justify-center bg-transparent p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
       <img
         src={data.imageUrl}
         alt="Browser Source"
@@ -80,7 +91,7 @@ const Source = () => {
             : "opacity-0 scale-95"
         }`}
       />
-    </div>
+    </motion.div>
   );
 };
 
