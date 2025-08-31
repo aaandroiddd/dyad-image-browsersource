@@ -7,11 +7,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { fadeIn, scaleUp } from "@/utils/animations";
 
 interface SourceData {
   imageUrl: string | null;
   isRevealed: boolean;
 }
+
+const imageAnimations = {
+  hidden: `${fadeIn.hidden} ${scaleUp.hidden}`,
+  visible: `${fadeIn.visible} ${scaleUp.visible}`,
+};
 
 const Source = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -75,9 +81,7 @@ const Source = () => {
         src={data.imageUrl}
         alt="Browser Source"
         className={`block max-w-full max-h-full object-contain transition-all duration-300 ease-in-out ${
-          data.isRevealed
-            ? "opacity-100 scale-100"
-            : "opacity-0 scale-95"
+          data.isRevealed ? imageAnimations.visible : imageAnimations.hidden
         }`}
       />
     </div>

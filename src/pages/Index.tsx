@@ -22,6 +22,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { fadeIn, scaleUp } from "@/utils/animations";
+
+const previewAnimations = {
+  hidden: `${fadeIn.hidden} ${scaleUp.hidden}`,
+  visible: `${fadeIn.visible} ${scaleUp.visible}`,
+};
 
 const Index = () => {
   const sb = supabase;
@@ -293,11 +299,15 @@ const Index = () => {
                 <div>
                   <Label>Image Preview</Label>
                   <div className="mt-2 rounded-md border aspect-video w-full flex items-center justify-center bg-muted overflow-hidden p-4">
-                    <img src={imageUrl} alt="Preview" className={`max-h-full max-w-full object-contain transition-all duration-300 ease-in-out ${
-                      isRevealed
-                        ? "opacity-100 scale-100"
-                        : "opacity-0 scale-95"
-                    }`} />
+                    <img
+                      src={imageUrl}
+                      alt="Preview"
+                      className={`max-h-full max-w-full object-contain transition-all duration-300 ease-in-out ${
+                        isRevealed
+                          ? previewAnimations.visible
+                          : previewAnimations.hidden
+                      }`}
+                    />
                   </div>
                 </div>
               )}
