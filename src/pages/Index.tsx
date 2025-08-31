@@ -1,4 +1,5 @@
 import { useState, useRef, ChangeEvent } from "react";
+import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadImage } from "@/lib/uploadImage";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { sectionVariants } from "@/utils/animations";
 
 const Index = () => {
   const sb = supabase;
@@ -37,18 +39,25 @@ const Index = () => {
 
   if (!sb) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 md:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Configuration Error</CardTitle>
-            <CardDescription>
-              Supabase environment variables are missing. Set
-              <code className="font-mono"> VITE_SUPABASE_URL </code>
-              and
-              <code className="font-mono"> VITE_SUPABASE_ANON_KEY </code>.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center p-4 md:p-8 bg-gray-950 text-gray-100">
+        <motion.div
+          variants={sectionVariants}
+          initial="hidden"
+          animate="visible"
+          whileHover="hover"
+        >
+          <Card className="bg-gray-900 border border-cyan-500/50 shadow-lg shadow-cyan-500/20">
+            <CardHeader>
+              <CardTitle>Configuration Error</CardTitle>
+              <CardDescription>
+                Supabase environment variables are missing. Set
+                <code className="font-mono"> VITE_SUPABASE_URL </code>
+                and
+                <code className="font-mono"> VITE_SUPABASE_ANON_KEY </code>.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </motion.div>
       </div>
     );
   }
@@ -203,15 +212,22 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 md:p-8">
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle className="text-3xl">Image Browser Source</CardTitle>
-          <CardDescription>
-            Create a browser source for your images to use in OBS Studio.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col items-center justify-center p-4 md:p-8">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        animate="visible"
+        whileHover="hover"
+        className="w-full max-w-2xl"
+      >
+        <Card className="bg-gray-900 border border-cyan-500/50 shadow-lg shadow-cyan-500/20">
+          <CardHeader>
+            <CardTitle className="text-3xl">Image Browser Source</CardTitle>
+            <CardDescription>
+              Create a browser source for your images to use in OBS Studio.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
           {!sessionId ? (
             <div className="space-y-4">
               <div>
@@ -225,7 +241,12 @@ const Index = () => {
                     onChange={(e) => setInputUrl(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmit()}
                   />
-                  <Button onClick={handleUrlSubmit}>Load</Button>
+                  <Button
+                    className="bg-cyan-500 hover:bg-cyan-400 text-gray-900"
+                    onClick={handleUrlSubmit}
+                  >
+                    Load
+                  </Button>
                 </div>
               </div>
               <div className="relative">
@@ -248,7 +269,7 @@ const Index = () => {
                 />
                 <Button
                   variant="outline"
-                  className="w-full"
+                  className="w-full border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="mr-2 h-4 w-4" />
@@ -266,7 +287,12 @@ const Index = () => {
                     value={browserSourceUrl}
                     className="font-mono"
                   />
-                  <Button variant="outline" size="icon" onClick={copyToClipboard}>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
+                    onClick={copyToClipboard}
+                  >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
@@ -275,7 +301,7 @@ const Index = () => {
                 </p>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center justify-between rounded-lg border border-cyan-500/50 p-4 bg-gray-800">
                 <div className="space-y-0.5">
                   <Label htmlFor="reveal-switch" className="text-base">Reveal Image</Label>
                   <p className="text-sm text-muted-foreground">
@@ -290,28 +316,46 @@ const Index = () => {
               </div>
 
               {imageUrl && (
-                <div>
+                <motion.div
+                  variants={sectionVariants}
+                  initial="hidden"
+                  animate="visible"
+                  whileHover="hover"
+                >
                   <Label>Image Preview</Label>
-                  <div className="mt-2 rounded-md border aspect-video w-full flex items-center justify-center bg-muted overflow-hidden p-4">
-                    <img src={imageUrl} alt="Preview" className={`max-h-full max-w-full object-contain transition-all duration-300 ease-in-out ${
-                      isRevealed
-                        ? "opacity-100 scale-100"
-                        : "opacity-0 scale-95"
-                    }`} />
+                  <div className="mt-2 rounded-md border border-cyan-500/50 aspect-video w-full flex items-center justify-center bg-gray-800 overflow-hidden p-4 shadow-inner shadow-cyan-500/20">
+                    <img
+                      src={imageUrl}
+                      alt="Preview"
+                      className={`max-h-full max-w-full object-contain transition-all duration-300 ease-in-out ${
+                        isRevealed ? "opacity-100 scale-100" : "opacity-0 scale-95"
+                      }`}
+                    />
                   </div>
-                </div>
+                </motion.div>
               )}
             </div>
           )}
         </CardContent>
-        <CardFooter className="justify-center pt-6 flex gap-4">
+        <motion.div
+          variants={sectionVariants}
+          initial="hidden"
+          animate="visible"
+          whileHover="hover"
+        >
+          <CardFooter className="justify-center pt-6 flex gap-4">
             {sessionId && (
               <>
-                <Button variant="link" onClick={() => setIsChangeDialogOpen(true)}>
+                <Button
+                  variant="link"
+                  className="text-cyan-400 hover:text-cyan-300"
+                  onClick={() => setIsChangeDialogOpen(true)}
+                >
                   Change image
                 </Button>
                 <Button
                   variant="link"
+                  className="text-cyan-400 hover:text-cyan-300"
                   onClick={async () => {
                     if (sessionId) {
                       await client.from("sessions").delete().eq("id", sessionId);
@@ -326,8 +370,10 @@ const Index = () => {
                 </Button>
               </>
             )}
-        </CardFooter>
+          </CardFooter>
+        </motion.div>
       </Card>
+      </motion.div>
 
       <Dialog open={isChangeDialogOpen} onOpenChange={setIsChangeDialogOpen}>
         <DialogContent>
@@ -349,7 +395,12 @@ const Index = () => {
                   onChange={(e) => setChangeUrl(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleChangeUrlSubmit()}
                 />
-                <Button onClick={handleChangeUrlSubmit}>Load</Button>
+                <Button
+                  className="bg-cyan-500 hover:bg-cyan-400 text-gray-900"
+                  onClick={handleChangeUrlSubmit}
+                >
+                  Load
+                </Button>
               </div>
             </div>
             <div className="relative">
@@ -370,7 +421,7 @@ const Index = () => {
               />
               <Button
                 variant="outline"
-                className="w-full"
+                className="w-full border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
                 onClick={() => changeFileInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
