@@ -1,4 +1,5 @@
 import { useState, useRef, ChangeEvent } from "react";
+import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadImage } from "@/lib/uploadImage";
 import { Button } from "@/components/ui/button";
@@ -275,7 +276,7 @@ const Index = () => {
                 </p>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center justify-between rounded-lg border border-border bg-background p-4">
                 <div className="space-y-0.5">
                   <Label htmlFor="reveal-switch" className="text-base">Reveal Image</Label>
                   <p className="text-sm text-muted-foreground">
@@ -292,12 +293,15 @@ const Index = () => {
               {imageUrl && (
                 <div>
                   <Label>Image Preview</Label>
-                  <div className="mt-2 rounded-md border aspect-video w-full flex items-center justify-center bg-muted overflow-hidden p-4">
-                    <img src={imageUrl} alt="Preview" className={`max-h-full max-w-full object-contain transition-all duration-300 ease-in-out ${
-                      isRevealed
-                        ? "opacity-100 scale-100"
-                        : "opacity-0 scale-95"
-                    }`} />
+                  <div className="mt-2 rounded-md border border-border aspect-video w-full flex items-center justify-center bg-background overflow-hidden p-4">
+                    <motion.img
+                      src={imageUrl}
+                      alt="Preview"
+                      className="max-h-full max-w-full object-contain"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: isRevealed ? 1 : 0, scale: isRevealed ? 1 : 0.95 }}
+                      transition={{ duration: 0.3, ease: "easeInOut" }}
+                    />
                   </div>
                 </div>
               )}
