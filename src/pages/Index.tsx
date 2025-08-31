@@ -39,14 +39,14 @@ const Index = () => {
 
   if (!sb) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 md:p-8 bg-gray-950 text-gray-100">
+        <div className="min-h-screen flex items-center justify-center p-4 md:p-8 bg-background text-foreground">
         <motion.div
           variants={sectionVariants}
           initial="hidden"
           animate="visible"
           whileHover="hover"
         >
-          <Card className="bg-gray-900 border border-cyan-500/50 shadow-lg shadow-cyan-500/20">
+            <Card className="bg-card border border-primary/50 shadow-lg shadow-[0_0_15px_hsl(var(--glow)/0.2)]">
             <CardHeader>
               <CardTitle>Configuration Error</CardTitle>
               <CardDescription>
@@ -212,7 +212,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col items-center justify-center p-4 md:p-8">
+      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 md:p-8">
       <motion.div
         variants={sectionVariants}
         initial="hidden"
@@ -220,7 +220,7 @@ const Index = () => {
         whileHover="hover"
         className="w-full max-w-2xl"
       >
-        <Card className="bg-gray-900 border border-cyan-500/50 shadow-lg shadow-cyan-500/20">
+        <Card className="bg-card border border-primary/50 shadow-lg shadow-[0_0_15px_hsl(var(--glow)/0.2)]">
           <CardHeader>
             <CardTitle className="text-3xl">Image Browser Source</CardTitle>
             <CardDescription>
@@ -242,7 +242,7 @@ const Index = () => {
                     onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmit()}
                   />
                   <Button
-                    className="bg-cyan-500 hover:bg-cyan-400 text-gray-900"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
                     onClick={handleUrlSubmit}
                   >
                     Load
@@ -269,7 +269,7 @@ const Index = () => {
                 />
                 <Button
                   variant="outline"
-                  className="w-full border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
+                    className="w-full border-primary text-primary hover:bg-primary/10"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="mr-2 h-4 w-4" />
@@ -290,7 +290,7 @@ const Index = () => {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
+                      className="border-primary text-primary hover:bg-primary/10"
                     onClick={copyToClipboard}
                   >
                     <Copy className="h-4 w-4" />
@@ -301,7 +301,7 @@ const Index = () => {
                 </p>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border border-cyan-500/50 p-4 bg-gray-800">
+                <div className="flex items-center justify-between rounded-lg border border-primary/50 p-4 bg-muted">
                 <div className="space-y-0.5">
                   <Label htmlFor="reveal-switch" className="text-base">Reveal Image</Label>
                   <p className="text-sm text-muted-foreground">
@@ -323,7 +323,7 @@ const Index = () => {
                   whileHover="hover"
                 >
                   <Label>Image Preview</Label>
-                  <div className="mt-2 rounded-md border border-cyan-500/50 aspect-video w-full flex items-center justify-center bg-gray-800 overflow-hidden p-4 shadow-inner shadow-cyan-500/20">
+                    <div className="mt-2 rounded-md border border-primary/50 aspect-video w-full flex items-center justify-center bg-muted overflow-hidden p-4 shadow-inner shadow-[0_0_15px_hsl(var(--glow)/0.2)]">
                     <img
                       src={imageUrl}
                       alt="Preview"
@@ -348,14 +348,14 @@ const Index = () => {
               <>
                 <Button
                   variant="link"
-                  className="text-cyan-400 hover:text-cyan-300"
+                    className="text-primary hover:text-primary/80"
                   onClick={() => setIsChangeDialogOpen(true)}
                 >
                   Change image
                 </Button>
                 <Button
                   variant="link"
-                  className="text-cyan-400 hover:text-cyan-300"
+                    className="text-primary hover:text-primary/80"
                   onClick={async () => {
                     if (sessionId) {
                       await client.from("sessions").delete().eq("id", sessionId);
@@ -396,7 +396,7 @@ const Index = () => {
                   onKeyDown={(e) => e.key === 'Enter' && handleChangeUrlSubmit()}
                 />
                 <Button
-                  className="bg-cyan-500 hover:bg-cyan-400 text-gray-900"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
                   onClick={handleChangeUrlSubmit}
                 >
                   Load
@@ -421,7 +421,7 @@ const Index = () => {
               />
               <Button
                 variant="outline"
-                className="w-full border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
+                  className="w-full border-primary text-primary hover:bg-primary/10"
                 onClick={() => changeFileInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
