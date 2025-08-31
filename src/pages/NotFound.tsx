@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { sectionVariants } from "@/utils/animations";
 
 const NotFound = () => {
   const location = useLocation();
@@ -13,18 +15,24 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+    <div className="min-h-screen flex items-center justify-center p-4 md:p-8 bg-background text-foreground">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="text-center"
+        variants={sectionVariants}
+        initial="hidden"
+        animate="visible"
+        whileHover="hover"
       >
-        <h1 className="text-4xl font-bold mb-4">404</h1>
-        <p className="text-xl text-muted-foreground mb-4">Oops! Page not found</p>
-        <a href="/" className="text-primary hover:text-primary/80 underline">
-          Return to Home
-        </a>
+        <Card className="bg-card border border-primary/50 shadow-lg shadow-[0_0_15px_hsl(var(--glow)/0.2)] text-center">
+          <CardHeader>
+            <CardTitle className="text-4xl mb-4">404</CardTitle>
+            <CardDescription className="text-xl mb-4">
+              Oops! Page not found
+            </CardDescription>
+            <a href="/" className="text-primary hover:text-primary/80 underline">
+              Return to Home
+            </a>
+          </CardHeader>
+        </Card>
       </motion.div>
     </div>
   );
