@@ -4,6 +4,11 @@ const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = (import.meta.env
   .VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
 
+const supabaseDomainPattern = /^[a-z0-9.-]+\.supabase\.(co|in)$/i;
+
+const isAllowedSupabaseHost = (host: string) =>
+  supabaseDomainPattern.test(host) || host === 'localhost' || host === '127.0.0.1';
+
 const sanitizeSupabaseUrl = (url: string | undefined): string | undefined => {
   if (!url) return undefined;
 
@@ -15,10 +20,15 @@ const sanitizeSupabaseUrl = (url: string | undefined): string | undefined => {
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       throw new Error('Supabase URL must use http or https');
     }
+    if (!isAllowedSupabaseHost(parsed.hostname)) {
+      console.error(
+        'Invalid Supabase domain provided. Expected a Supabase project URL ending in .supabase.co or .supabase.in (or localhost for self-hosted setups).'
+      );
+      return undefined;
+    }
     return parsed.origin;
   } catch {
     const projectRefPattern = /^[a-z0-9]{20}$/i;
-    const supabaseDomainPattern = /^[a-z0-9.-]+\.supabase\.(co|in)$/i;
 
     const inferredDomain = projectRefPattern.test(trimmed)
       ? `${trimmed}.supabase.co`
