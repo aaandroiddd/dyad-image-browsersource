@@ -1,8 +1,47 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = (import.meta.env
-  .VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
+type EnvSource = Record<string, string | undefined> | undefined;
+
+const coalesceEnvValue = (
+  keys: string[],
+  ...sources: EnvSource[]
+): string | undefined => {
+  for (const source of sources) {
+    if (!source) continue;
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const importMetaEnv = import.meta.env as Record<string, string | undefined>;
+const globalProcessEnv =
+  typeof globalThis !== 'undefined' && 'process' in globalThis
+    ? ((globalThis as { process?: { env?: Record<string, string | undefined> } })
+        .process?.env ?? undefined)
+    : undefined;
+
+const rawSupabaseUrl = coalesceEnvValue(
+  ['VITE_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL', 'PUBLIC_SUPABASE_URL', 'SUPABASE_URL'],
+  importMetaEnv,
+  globalProcessEnv
+);
+
+const supabaseAnonKey = coalesceEnvValue(
+  [
+    'VITE_SUPABASE_ANON_KEY',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_ANON_KEY',
+  ],
+  importMetaEnv,
+  globalProcessEnv
+);
 
 const supabaseDomainPattern = /^[a-z0-9.-]+\.supabase\.(co|in)$/i;
 
