@@ -36,6 +36,7 @@ const Index = () => {
   const changeFileInputRef = useRef<HTMLInputElement>(null);
   const [changeUrl, setChangeUrl] = useState<string>("");
   const [isChangeDialogOpen, setIsChangeDialogOpen] = useState(false);
+  const [shouldRevealOnLoad, setShouldRevealOnLoad] = useState(false);
   const { toast } = useToast();
 
   if (!sb) {
@@ -141,18 +142,19 @@ const Index = () => {
     if (!sessionId) return;
 
     setIsRevealed(false);
+    setShouldRevealOnLoad(true);
     await client.from("sessions").update({ is_revealed: false }).eq("id", sessionId);
 
     await client.from("sessions").update({ image_url: newImageUrl }).eq("id", sessionId);
     setImageUrl(newImageUrl);
+  };
 
-    setTimeout(async () => {
-      setIsRevealed(true);
-      await client
-        .from("sessions")
-        .update({ is_revealed: true })
-        .eq("id", sessionId);
-    }, 300);
+  const handleImageLoad = async () => {
+    if (!sessionId || !shouldRevealOnLoad) return;
+
+    setShouldRevealOnLoad(false);
+    setIsRevealed(true);
+    await client.from("sessions").update({ is_revealed: true }).eq("id", sessionId);
   };
 
   const handleChangeUrlSubmit = async () => {
@@ -331,6 +333,7 @@ const Index = () => {
                     <img
                       src={imageUrl}
                       alt="Preview"
+                      onLoad={handleImageLoad}
                       className={`max-h-full max-w-full object-contain transition-all duration-300 ease-in-out ${
                         isRevealed ? "opacity-100 scale-100" : "opacity-0 scale-95"
                       }`}
