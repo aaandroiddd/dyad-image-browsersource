@@ -1,19 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build@3.0.0",
-      "config": {
-        "distDir": "dist"
-      }
-    },
-    {
-      "src": "server/api/**/*.ts",
-      "use": "@vercel/node@4.0.0"
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "server/api/**/*.ts": {
+      "runtime": "nodejs20.x"
     }
-  ],
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
