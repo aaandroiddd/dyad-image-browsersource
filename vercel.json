@@ -4,14 +4,14 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/static-build@2.0.0",
+      "use": "@vercel/static-build@3.0.0",
       "config": {
         "distDir": "dist"
       }
     },
     {
       "src": "server/api/**/*.ts",
-      "use": "@vercel/node@3.0.0"
+      "use": "@vercel/node@4.0.0"
     }
   ],
   "rewrites": [
