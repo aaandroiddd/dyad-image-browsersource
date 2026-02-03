@@ -1,6 +1,9 @@
 /* eslint-env node */
 
 import type { IncomingMessage, ServerResponse } from "http";
+import { readFile, writeFile } from "fs/promises";
+import { fileURLToPath } from "url";
+import path from "path";
 
 interface ElestralsCard {
   id: string;
@@ -15,6 +18,10 @@ const cache: { timestamp: number; cards: ElestralsCard[] } = {
   timestamp: 0,
   cards: [],
 };
+const SNAPSHOT_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../data/elestrals-cards-snapshot.json",
+);
 
 const CARD_SOURCES = [
   { url: "https://collect.elestrals.com/cards.json", type: "json" },
@@ -175,6 +182,27 @@ const dedupeCards = (cards: ElestralsCard[]) => {
   });
 };
 
+const readSnapshot = async () => {
+  try {
+    const contents = await readFile(SNAPSHOT_PATH, "utf8");
+    const payload = JSON.parse(contents) as { updatedAt?: number; cards?: ElestralsCard[] };
+    return {
+      updatedAt: typeof payload.updatedAt === "number" ? payload.updatedAt : 0,
+      cards: Array.isArray(payload.cards) ? payload.cards : [],
+    };
+  } catch (error) {
+    return { updatedAt: 0, cards: [] };
+  }
+};
+
+const writeSnapshot = async (cards: ElestralsCard[]) => {
+  const payload = {
+    updatedAt: Date.now(),
+    cards,
+  };
+  await writeFile(SNAPSHOT_PATH, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+};
+
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "GET") {
     res.statusCode = 405;
@@ -201,6 +229,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         const deduped = dedupeCards(cards);
         cache.cards = deduped;
         cache.timestamp = now;
+        await writeSnapshot(deduped);
         res.setHeader("Content-Type", "application/json");
         res.statusCode = 200;
         res.end(JSON.stringify({ cards: deduped, cached: false, source: source.url }));
@@ -209,6 +238,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     } catch (error) {
       errors.push(`${source.url}: ${String(error)}`);
     }
+  }
+
+  const snapshot = await readSnapshot();
+  if (snapshot.cards.length) {
+    res.setHeader("Content-Type", "application/json");
+    res.statusCode = 200;
+    res.end(
+      JSON.stringify({
+        cards: snapshot.cards,
+        cached: true,
+        stale: true,
+        snapshotUpdatedAt: snapshot.updatedAt,
+        errors,
+      }),
+    );
+    return;
   }
 
   res.statusCode = 502;
