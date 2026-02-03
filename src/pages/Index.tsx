@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { sectionVariants } from "@/utils/animations";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Link } from "react-router-dom";
 
 const Index = () => {
   const sb = supabase;
@@ -232,6 +233,11 @@ const Index = () => {
             <CardDescription>
               Create a browser source for your images to use in OBS Studio.
             </CardDescription>
+            <div>
+              <Button asChild variant="link" className="px-0 text-primary hover:text-primary/80">
+                <Link to="/elestrals">Looking for Elestrals cards? Try the card finder.</Link>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
           {!sessionId ? (
