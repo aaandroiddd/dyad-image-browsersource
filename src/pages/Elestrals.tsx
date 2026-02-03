@@ -31,8 +31,181 @@ const SCORE_PREFIX_MATCH = 800;
 const SCORE_INCLUDES_MATCH = 500;
 const SCORE_FUZZY_MATCH = 200;
 const MAX_RESULTS = 50;
+const CARD_SOURCES = [
+  { url: "https://collect.elestrals.com/cards.json", type: "json" as const },
+  { url: "https://collect.elestrals.com/api/cards", type: "json" as const },
+  { url: "https://collect.elestrals.com/cards", type: "html" as const },
+];
 
 const normalize = (value: string) => value.trim().toLowerCase();
+
+const normalizeValue = (value?: string | number | null) =>
+  value === null || value === undefined ? undefined : String(value).trim();
+
+const buildCard = (raw: Record<string, unknown>, fallbackId: string): ElestralsCard | null => {
+  const name =
+    normalizeValue(raw.name as string) ??
+    normalizeValue(raw.cardName as string) ??
+    normalizeValue(raw.title as string);
+  const imageUrl =
+    normalizeValue(raw.imageUrl as string) ??
+    normalizeValue(raw.image_url as string) ??
+    normalizeValue(raw.image as string) ??
+    normalizeValue(raw.img as string) ??
+    normalizeValue(raw.cardImage as string);
+  if (!name || !imageUrl) return null;
+
+  const setNumber =
+    normalizeValue(raw.setNumber as string) ??
+    normalizeValue(raw.set_number as string) ??
+    normalizeValue(raw.cardNumber as string) ??
+    normalizeValue(raw.number as string) ??
+    normalizeValue(raw.set as string);
+  const info =
+    normalizeValue(raw.info as string) ??
+    normalizeValue(raw.text as string) ??
+    normalizeValue(raw.description as string) ??
+    normalizeValue(raw.effect as string);
+  const id =
+    normalizeValue(raw.id as string) ??
+    normalizeValue(raw.slug as string) ??
+    normalizeValue(raw.uuid as string) ??
+    `${name}-${setNumber ?? fallbackId}`;
+
+  return {
+    id,
+    name,
+    imageUrl,
+    setNumber: setNumber || undefined,
+    info: info || undefined,
+  };
+};
+
+const collectCardsFromArray = (items: unknown[]) =>
+  items
+    .map((item, index) => (item && typeof item === "object" ? buildCard(item as Record<string, unknown>, `${index}`) : null))
+    .filter((card): card is ElestralsCard => Boolean(card));
+
+const collectCardsFromObject = (payload: unknown) => {
+  if (!payload || typeof payload !== "object") return [];
+  const possibleArrays: unknown[] = [];
+  const record = payload as Record<string, unknown>;
+  const keys = ["cards", "data", "items", "results"];
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      possibleArrays.push(...value);
+    }
+  }
+  if (possibleArrays.length > 0) {
+    return collectCardsFromArray(possibleArrays);
+  }
+  return [];
+};
+
+const deepCollectCards = (payload: unknown) => {
+  const results: ElestralsCard[] = [];
+  const visited = new Set<unknown>();
+
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        visit(item);
+      }
+      return;
+    }
+
+    const record = value as Record<string, unknown>;
+    const card = buildCard(record, `${results.length}`);
+    if (card) {
+      results.push(card);
+    }
+
+    for (const child of Object.values(record)) {
+      visit(child);
+    }
+  };
+
+  visit(payload);
+  return results;
+};
+
+const parseHtmlForJson = (html: string) => {
+  const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (nextDataMatch?.[1]) {
+    return JSON.parse(nextDataMatch[1]);
+  }
+
+  const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
+  if (stateMatch?.[1]) {
+    return JSON.parse(stateMatch[1]);
+  }
+
+  const preloadedMatch = html.match(/__PRELOADED_STATE__\s*=\s*({[\s\S]*?});/);
+  if (preloadedMatch?.[1]) {
+    return JSON.parse(preloadedMatch[1]);
+  }
+
+  return null;
+};
+
+const fetchCardsFromJson = async (url: string) => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}`);
+  }
+  const payload = await response.json();
+  const fromKnown = collectCardsFromObject(payload);
+  if (fromKnown.length) return fromKnown;
+  const fromDeep = deepCollectCards(payload);
+  if (fromDeep.length) return fromDeep;
+  return [];
+};
+
+const fetchCardsFromHtml = async (url: string) => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}`);
+  }
+  const html = await response.text();
+  const payload = parseHtmlForJson(html);
+  if (payload) {
+    const fromKnown = collectCardsFromObject(payload);
+    if (fromKnown.length) return fromKnown;
+    const fromDeep = deepCollectCards(payload);
+    if (fromDeep.length) return fromDeep;
+  }
+  return [];
+};
+
+const fetchCardsFromSources = async () => {
+  const errors: string[] = [];
+  for (const source of CARD_SOURCES) {
+    try {
+      const cards = source.type === "json" ? await fetchCardsFromJson(source.url) : await fetchCardsFromHtml(source.url);
+      if (cards.length) {
+        return cards;
+      }
+    } catch (error) {
+      errors.push(`${source.url}: ${String(error)}`);
+    }
+  }
+  throw new Error(errors.join(" | ") || "Unable to fetch card data.");
+};
+
+const parseCardPayload = (rawText: string) => {
+  const trimmed = rawText.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+};
 
 const getFuzzyScore = (name: string, query: string) => {
   let nameIndex = 0;
@@ -83,12 +256,14 @@ const Elestrals = () => {
       setLoadError(null);
       try {
         const response = await fetch("/api/elestrals/cards");
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
-        const payload = await response.json();
-        if (!Array.isArray(payload.cards)) {
-          throw new Error("Unexpected response format.");
+        const responseText = await response.text();
+        let payload = parseCardPayload(responseText);
+        if (!payload || !Array.isArray(payload.cards)) {
+          if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+          }
+          const fallbackCards = await fetchCardsFromSources();
+          payload = { cards: fallbackCards };
         }
         if (isMounted) {
           setCards(payload.cards);
