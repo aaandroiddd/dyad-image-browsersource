@@ -97,10 +97,19 @@ const Elestrals = () => {
         const payload = parseCardPayload(responseText);
         if (!response.ok) {
           const details = payload && "details" in payload ? `: ${(payload as { details?: string }).details}` : "";
-          throw new Error(`Request failed with status ${response.status}${details}`);
+          if (isMounted) {
+            setLoadError(`Unable to load card data (status ${response.status}${details}).`);
+            setCards([]);
+          }
+          return;
         }
         if (!payload || !Array.isArray(payload.cards)) {
-          throw new Error("Response payload missing cards array.");
+          const fallbackMessage = payload && "error" in payload ? String((payload as { error?: string }).error) : null;
+          if (isMounted) {
+            setLoadError(fallbackMessage || "Card data was unavailable. Please try again later.");
+            setCards([]);
+          }
+          return;
         }
         if (isMounted) {
           setCards(payload.cards);
