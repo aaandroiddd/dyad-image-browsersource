@@ -14,20 +14,29 @@ interface ElestralsCard {
 }
 
 const CACHE_TTL_MS = 1000 * 60 * 60;
-const cache: { timestamp: number; cards: ElestralsCard[] } = {
-  timestamp: 0,
-  cards: [],
+const cache: Record<"base" | "all", { timestamp: number; cards: ElestralsCard[] }> = {
+  base: { timestamp: 0, cards: [] },
+  all: { timestamp: 0, cards: [] },
 };
 const SNAPSHOT_PATH = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../data/elestrals-cards-snapshot.json",
 );
 
-const CARD_SOURCES = [
-  { url: "https://collect.elestrals.com/cards.json", type: "json" },
-  { url: "https://collect.elestrals.com/api/cards", type: "json" },
-  { url: "https://collect.elestrals.com/cards", type: "html" },
-];
+const CARD_SOURCES: Record<"base" | "all", { url: string; type: "json" | "html" }[]> = {
+  base: [
+    { url: "https://collect.elestrals.com/api/cards?base_card=true", type: "json" },
+    { url: "https://collect.elestrals.com/cards?base_card=true", type: "html" },
+    { url: "https://collect.elestrals.com/cards.json", type: "json" },
+    { url: "https://collect.elestrals.com/api/cards", type: "json" },
+    { url: "https://collect.elestrals.com/cards", type: "html" },
+  ],
+  all: [
+    { url: "https://collect.elestrals.com/api/cards", type: "json" },
+    { url: "https://collect.elestrals.com/cards", type: "html" },
+    { url: "https://collect.elestrals.com/cards.json", type: "json" },
+  ],
+};
 
 const normalizeValue = (value?: string | number | null) =>
   value === null || value === undefined ? undefined : String(value).trim();
@@ -210,16 +219,23 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  const requestUrl = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
+  const baseCardParam = requestUrl.searchParams.get("base_card") ?? requestUrl.searchParams.get("baseCard");
+  const baseCardOnly = baseCardParam
+    ? !["0", "false", "no"].includes(baseCardParam.toLowerCase())
+    : true;
+  const cacheKey: "base" | "all" = baseCardOnly ? "base" : "all";
+
   const now = Date.now();
-  if (cache.cards.length && now - cache.timestamp < CACHE_TTL_MS) {
+  if (cache[cacheKey].cards.length && now - cache[cacheKey].timestamp < CACHE_TTL_MS) {
     res.setHeader("Content-Type", "application/json");
     res.statusCode = 200;
-    res.end(JSON.stringify({ cards: cache.cards, cached: true }));
+    res.end(JSON.stringify({ cards: cache[cacheKey].cards, cached: true, baseCardOnly }));
     return;
   }
 
   const errors: string[] = [];
-  for (const source of CARD_SOURCES) {
+  for (const source of CARD_SOURCES[cacheKey]) {
     try {
       const cards =
         source.type === "json"
@@ -232,7 +248,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         await writeSnapshot(deduped);
         res.setHeader("Content-Type", "application/json");
         res.statusCode = 200;
-        res.end(JSON.stringify({ cards: deduped, cached: false, source: source.url }));
+        res.end(JSON.stringify({ cards: deduped, cached: false, source: source.url, baseCardOnly }));
         return;
       }
     } catch (error) {

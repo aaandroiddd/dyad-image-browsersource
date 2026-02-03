@@ -93,7 +93,16 @@ const Elestrals = () => {
       setLoadError(null);
       try {
         const response = await fetch("/api/elestrals/cards");
+        const contentType = response.headers.get("content-type") ?? "";
         const responseText = await response.text();
+        const isJson = contentType.includes("application/json");
+        if (!isJson) {
+          if (isMounted) {
+            setLoadError("API route not configured. Expected a JSON response from /api/elestrals/cards.");
+            setCards([]);
+          }
+          return;
+        }
         const payload = parseCardPayload(responseText);
         if (!response.ok) {
           const details = payload && "details" in payload ? `: ${(payload as { details?: string }).details}` : "";
