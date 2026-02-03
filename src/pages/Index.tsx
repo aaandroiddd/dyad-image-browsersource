@@ -1,5 +1,5 @@
 import { useState, useRef, ChangeEvent } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { uploadImage } from "@/lib/uploadImage";
 import { Button } from "@/components/ui/button";
@@ -329,15 +329,23 @@ const Index = () => {
                   whileHover="hover"
                 >
                   <Label>Image Preview</Label>
-                    <div className="mt-2 rounded-md border border-primary/50 aspect-video w-full flex items-center justify-center bg-muted overflow-hidden p-4 shadow-inner shadow-[0_0_15px_hsl(var(--glow)/0.2)]">
-                    <img
-                      src={imageUrl}
-                      alt="Preview"
-                      onLoad={handleImageLoad}
-                      className={`max-h-full max-w-full object-contain transition-all duration-300 ease-in-out ${
-                        isRevealed ? "opacity-100 scale-100" : "opacity-0 scale-95"
-                      }`}
-                    />
+                  <div className="mt-2 rounded-md border border-primary/50 aspect-video w-full flex items-center justify-center bg-muted overflow-hidden p-4 shadow-inner shadow-[0_0_15px_hsl(var(--glow)/0.2)]">
+                    <AnimatePresence mode="wait">
+                      <motion.img
+                        key={imageUrl}
+                        src={imageUrl}
+                        alt="Preview"
+                        onLoad={handleImageLoad}
+                        className="max-h-full max-w-full object-contain"
+                        initial={{ opacity: 0, scale: 0.97 }}
+                        animate={{
+                          opacity: isRevealed ? 1 : 0,
+                          scale: isRevealed ? 1 : 0.97,
+                        }}
+                        exit={{ opacity: 0, scale: 0.97 }}
+                        transition={{ duration: 0.45, ease: "easeOut" }}
+                      />
+                    </AnimatePresence>
                   </div>
                 </motion.div>
               )}

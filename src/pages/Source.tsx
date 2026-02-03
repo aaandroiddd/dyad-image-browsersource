@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { sectionVariants } from "@/utils/animations";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
@@ -78,18 +78,25 @@ const Source = () => {
     return null;
   }
 
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-transparent p-4">
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-transparent p-4">
+      <AnimatePresence mode="wait">
         <motion.img
+          key={data.imageUrl}
           src={data.imageUrl}
           alt="Browser Source"
           className="block max-w-full max-h-full object-contain"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: data.isRevealed ? 1 : 0, scale: data.isRevealed ? 1 : 0.95 }}
-          transition={{ duration: 0.3 }}
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{
+            opacity: data.isRevealed ? 1 : 0,
+            scale: data.isRevealed ? 1 : 0.97,
+          }}
+          exit={{ opacity: 0, scale: 0.97 }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
         />
-      </div>
-    );
+      </AnimatePresence>
+    </div>
+  );
 };
 
 export default Source;
