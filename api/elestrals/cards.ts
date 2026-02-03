@@ -18,10 +18,7 @@ const cache: Record<"base" | "all", { timestamp: number; cards: ElestralsCard[] 
   base: { timestamp: 0, cards: [] },
   all: { timestamp: 0, cards: [] },
 };
-const SNAPSHOT_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../data/elestrals-cards-snapshot.json",
-);
+const SNAPSHOT_PATH = path.resolve(process.cwd(), "server/data/elestrals-cards-snapshot.json");
 
 const CARD_SOURCES: Record<"base" | "all", { url: string; type: "json" | "html" }[]> = {
   base: [

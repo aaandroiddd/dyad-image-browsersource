@@ -20,10 +20,10 @@ incorrect domain will prevent the app from connecting to Supabase.
 ### Serverless (recommended)
 
 This repo ships with Vercel configuration that exposes the API route at
-`/api/elestrals/cards` by running the handler in `server/api/elestrals/cards.ts`
+`/api/elestrals/cards` by running the handler in `api/elestrals/cards.ts`
 as a serverless function. Deploying to Vercel (or any platform that supports
-Node.js serverless functions from `server/api`) will make the route available
-without extra setup. See `vercel.json` for the rewrite and runtime settings.
+Node.js serverless functions from `api`) will make the route available without
+extra setup. See `vercel.json` for the SPA rewrite.
 
 ### Static hosting (SPA-only)
 
