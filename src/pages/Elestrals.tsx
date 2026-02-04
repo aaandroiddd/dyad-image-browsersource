@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/lib/supabaseClient";
@@ -52,6 +52,52 @@ const Elestrals = () => {
   const [sourceData, setSourceData] = useState<SourceData>({ imageUrl: null, isRevealed: false });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState<string | null>(null);
+
+  const fetchCards = useCallback(
+    async ({ signal, refresh = false }: { signal?: AbortSignal; refresh?: boolean } = {}) => {
+      const normalizedQuery = normalize(query);
+      const params = new URLSearchParams({
+        q: normalizedQuery,
+        page: "1",
+        pageSize: `${PAGE_SIZE}`,
+      });
+      if (refresh) {
+        params.set("refresh", "1");
+      }
+      const response = await fetch(`${apiBase}/elestrals/search?${params.toString()}`, { signal });
+      const contentType = response.headers.get("content-type") ?? "";
+      const responseText = await response.text();
+      const isJson = contentType.includes("application/json");
+      if (!isJson) {
+        setLoadError("API route not configured. Expected JSON response from the local /api/elestrals/search index.");
+        setCards([]);
+        setTotalCards(0);
+        return false;
+      }
+
+      const payload = parseCardPayload(responseText);
+      if (!response.ok) {
+        const details = payload && "error" in payload ? `: ${(payload as { error?: string }).error}` : "";
+        setLoadError(`Unable to load card data (status ${response.status}${details}). Check the local index ingestion job.`);
+        setCards([]);
+        setTotalCards(0);
+        return false;
+      }
+      if (!payload || !Array.isArray(payload.cards)) {
+        const fallbackMessage = payload && "error" in payload ? String((payload as { error?: string }).error) : null;
+        setLoadError(fallbackMessage || "Card data was unavailable. Please try again later after ingesting the local index.");
+        setCards([]);
+        setTotalCards(0);
+        return false;
+      }
+      setCards(payload.cards);
+      setTotalCards(typeof payload.total === "number" ? payload.total : payload.cards.length);
+      return true;
+    },
+    [query],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -59,40 +105,7 @@ const Elestrals = () => {
       setIsLoading(true);
       setLoadError(null);
       try {
-        const normalizedQuery = normalize(query);
-        const params = new URLSearchParams({
-          q: normalizedQuery,
-          page: "1",
-          pageSize: `${PAGE_SIZE}`,
-        });
-        const response = await fetch(`${apiBase}/elestrals/search?${params.toString()}`, { signal: controller.signal });
-        const contentType = response.headers.get("content-type") ?? "";
-        const responseText = await response.text();
-        const isJson = contentType.includes("application/json");
-        if (!isJson) {
-          setLoadError("API route not configured. Expected JSON response from the local /api/elestrals/search index.");
-          setCards([]);
-          setTotalCards(0);
-          return;
-        }
-
-        const payload = parseCardPayload(responseText);
-        if (!response.ok) {
-          const details = payload && "error" in payload ? `: ${(payload as { error?: string }).error}` : "";
-          setLoadError(`Unable to load card data (status ${response.status}${details}). Check the local index ingestion job.`);
-          setCards([]);
-          setTotalCards(0);
-          return;
-        }
-        if (!payload || !Array.isArray(payload.cards)) {
-          const fallbackMessage = payload && "error" in payload ? String((payload as { error?: string }).error) : null;
-          setLoadError(fallbackMessage || "Card data was unavailable. Please try again later after ingesting the local index.");
-          setCards([]);
-          setTotalCards(0);
-          return;
-        }
-        setCards(payload.cards);
-        setTotalCards(typeof payload.total === "number" ? payload.total : payload.cards.length);
+        await fetchCards({ signal: controller.signal });
       } catch (error) {
         if ((error as Error).name === "AbortError") {
           return;
@@ -110,7 +123,28 @@ const Elestrals = () => {
     return () => {
       controller.abort();
     };
-  }, [query]);
+  }, [fetchCards]);
+
+  const handleRefreshIndex = async () => {
+    setIsRefreshing(true);
+    setRefreshStatus(null);
+    setLoadError(null);
+    try {
+      const refreshed = await fetchCards({ refresh: true });
+      if (refreshed) {
+        setRefreshStatus("Search index refreshed from the source.");
+      } else {
+        setRefreshStatus("Unable to refresh the search index. Check server logs for details.");
+      }
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") {
+        console.error("Failed to refresh index:", error);
+        setRefreshStatus("Unable to refresh the search index. Check server logs for details.");
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (!sb) {
     return (
@@ -225,6 +259,21 @@ const Elestrals = () => {
               </div>
               {loadError && <p className="text-sm text-destructive">{loadError}</p>}
               {isLoading && <p className="text-sm text-muted-foreground">Loading cards…</p>}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-primary text-primary hover:bg-primary/10"
+                  onClick={handleRefreshIndex}
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? "Refreshing index…" : "Refresh search index"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Runs the server-side refresh to sync the search index with Elestrals data.
+                </p>
+              </div>
+              {refreshStatus && <p className="text-xs text-muted-foreground">{refreshStatus}</p>}
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
