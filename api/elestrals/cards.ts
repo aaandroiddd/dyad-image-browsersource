@@ -1,9 +1,6 @@
 /* eslint-env node */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import { readFile, writeFile } from "fs/promises";
-import { fileURLToPath } from "url";
-import path from "path";
 
 interface ElestralsCard {
   id: string;
@@ -18,7 +15,9 @@ const cache: Record<"base" | "all", { timestamp: number; cards: ElestralsCard[] 
   base: { timestamp: 0, cards: [] },
   all: { timestamp: 0, cards: [] },
 };
-const SNAPSHOT_PATH = path.resolve(process.cwd(), "server/data/elestrals-cards-snapshot.json");
+const SNAPSHOT_KEY = "elestrals:cards:snapshot";
+const KV_REST_API_URL = process.env.KV_REST_API_URL;
+const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN;
 
 const CARD_SOURCES: Record<"base" | "all", { url: string; type: "json" | "html" }[]> = {
   base: [
@@ -188,13 +187,42 @@ const dedupeCards = (cards: ElestralsCard[]) => {
   });
 };
 
+const getSnapshotPayload = (cards: ElestralsCard[]) => ({
+  updatedAt: Date.now(),
+  cards: cards.map((card) => ({
+    id: card.id,
+    name: card.name,
+    imageUrl: card.imageUrl,
+    setNumber: card.setNumber,
+    info: card.info,
+  })),
+});
+
 const readSnapshot = async () => {
+  if (!KV_REST_API_URL || !KV_REST_API_TOKEN) {
+    return { updatedAt: 0, cards: [] };
+  }
+
   try {
-    const contents = await readFile(SNAPSHOT_PATH, "utf8");
-    const payload = JSON.parse(contents) as { updatedAt?: number; cards?: ElestralsCard[] };
+    const response = await fetch(`${KV_REST_API_URL}/get/${encodeURIComponent(SNAPSHOT_KEY)}`, {
+      headers: {
+        Authorization: `Bearer ${KV_REST_API_TOKEN}`,
+      },
+    });
+
+    if (!response.ok) {
+      return { updatedAt: 0, cards: [] };
+    }
+
+    const payload = (await response.json()) as { result?: string | null };
+    if (!payload?.result) {
+      return { updatedAt: 0, cards: [] };
+    }
+
+    const parsed = JSON.parse(payload.result) as { updatedAt?: number; cards?: ElestralsCard[] };
     return {
-      updatedAt: typeof payload.updatedAt === "number" ? payload.updatedAt : 0,
-      cards: Array.isArray(payload.cards) ? payload.cards : [],
+      updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
+      cards: Array.isArray(parsed.cards) ? parsed.cards : [],
     };
   } catch (error) {
     return { updatedAt: 0, cards: [] };
@@ -202,11 +230,28 @@ const readSnapshot = async () => {
 };
 
 const writeSnapshot = async (cards: ElestralsCard[]) => {
-  const payload = {
-    updatedAt: Date.now(),
-    cards,
-  };
-  await writeFile(SNAPSHOT_PATH, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  if (!KV_REST_API_URL || !KV_REST_API_TOKEN) {
+    return;
+  }
+
+  const payload = JSON.stringify(getSnapshotPayload(cards));
+  try {
+    const response = await fetch(
+      `${KV_REST_API_URL}/set/${encodeURIComponent(SNAPSHOT_KEY)}/${encodeURIComponent(payload)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${KV_REST_API_TOKEN}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to persist snapshot (status ${response.status})`);
+    }
+  } catch (error) {
+    // Snapshot persistence should not block serving fresh data.
+  }
 };
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
