@@ -1,35 +1,12 @@
 /* eslint-env node */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import { readFile } from "fs/promises";
-import path from "path";
+import { readSnapshot, refreshSnapshot } from "../../server/elestrals/cards";
 
-interface ElestralsCard {
-  id: string;
-  name: string;
-  imageUrl: string;
-  setNumber?: string;
-  info?: string;
-}
-
-const SNAPSHOT_PATH = path.resolve(process.cwd(), "server/data/elestrals-cards-snapshot.json");
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
 const normalize = (value: string) => value.trim().toLowerCase();
-
-const readSnapshot = async () => {
-  try {
-    const contents = await readFile(SNAPSHOT_PATH, "utf8");
-    const payload = JSON.parse(contents) as { updatedAt?: number; cards?: ElestralsCard[] };
-    return {
-      updatedAt: typeof payload.updatedAt === "number" ? payload.updatedAt : 0,
-      cards: Array.isArray(payload.cards) ? payload.cards : [],
-    };
-  } catch {
-    return { updatedAt: 0, cards: [] };
-  }
-};
 
 const clampNumber = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -42,6 +19,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const requestUrl = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
   const query = requestUrl.searchParams.get("q")?.trim() ?? "";
+  const baseCardParam = requestUrl.searchParams.get("base_card") ?? requestUrl.searchParams.get("baseCard");
+  const baseCardOnly = baseCardParam
+    ? !["0", "false", "no"].includes(baseCardParam.toLowerCase())
+    : true;
+  const cacheKey: "base" | "all" = baseCardOnly ? "base" : "all";
+  const wantsRefresh = ["1", "true", "yes"].includes((requestUrl.searchParams.get("refresh") ?? "").toLowerCase());
+  const remoteAllowed = process.env.ELESTRALS_REMOTE_FETCH === "true" || process.env.NODE_ENV !== "production";
   const pageParam = Number(requestUrl.searchParams.get("page") ?? "1");
   const pageSizeParam = Number(requestUrl.searchParams.get("pageSize") ?? `${DEFAULT_PAGE_SIZE}`);
   const page = Number.isFinite(pageParam) ? Math.max(1, Math.floor(pageParam)) : 1;
@@ -50,12 +34,25 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     : DEFAULT_PAGE_SIZE;
 
   const snapshot = await readSnapshot();
-  if (!snapshot.cards.length) {
-    res.statusCode = 503;
+  const initialDataset = snapshot.datasets[cacheKey];
+  const dataset =
+    wantsRefresh || initialDataset.cards.length === 0
+      ? await (async () => {
+          const { cards } = await refreshSnapshot(cacheKey, remoteAllowed);
+          if (cards.length) {
+            return { updatedAt: Date.now(), cards };
+          }
+          return initialDataset;
+        })()
+      : initialDataset;
+  if (!dataset.cards.length) {
+    res.statusCode = remoteAllowed ? 502 : 503;
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify({
-        error: "Card snapshot not available. Refresh the dataset via /api/elestrals/cards.",
+        error: remoteAllowed
+          ? "Unable to fetch card data."
+          : "Card snapshot not available. Refresh the dataset via /api/elestrals/cards.",
       }),
     );
     return;
@@ -63,8 +60,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const normalizedQuery = normalize(query);
   const filteredCards = normalizedQuery
-    ? snapshot.cards.filter((card) => normalize(card.name).includes(normalizedQuery))
-    : snapshot.cards;
+    ? dataset.cards.filter((card) => normalize(card.name).includes(normalizedQuery))
+    : dataset.cards;
   const total = filteredCards.length;
   const startIndex = (page - 1) * pageSize;
   const endIndex = startIndex + pageSize;
@@ -78,7 +75,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       page,
       pageSize,
       total,
-      updatedAt: snapshot.updatedAt,
+      updatedAt: dataset.updatedAt,
       cards: pagedCards,
     }),
   );
