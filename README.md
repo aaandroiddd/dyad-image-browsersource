@@ -37,3 +37,8 @@ serverless function separately and proxy requests back to it. For example:
 
 Without a proxy/backend, the client will receive HTML instead of JSON and show
 an "API route not configured" error.
+
+If your backend is hosted on a different base path, set
+`VITE_ELESTRALS_API_BASE` to point at it (for example,
+`https://your-backend.example.com/api`). The UI will use this value when
+calling `/elestrals/search`.

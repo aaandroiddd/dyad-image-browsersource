@@ -29,6 +29,7 @@ interface SourceData {
 const PAGE_SIZE = 50;
 
 const normalize = (value: string) => value.trim().toLowerCase();
+const apiBase = (import.meta.env.VITE_ELESTRALS_API_BASE || "/api").replace(/\/+$/, "");
 
 const parseCardPayload = (rawText: string) => {
   const trimmed = rawText.trim();
@@ -64,12 +65,14 @@ const Elestrals = () => {
           page: "1",
           pageSize: `${PAGE_SIZE}`,
         });
-        const response = await fetch(`/api/elestrals/search?${params.toString()}`, { signal: controller.signal });
+        const response = await fetch(`${apiBase}/elestrals/search?${params.toString()}`, { signal: controller.signal });
         const contentType = response.headers.get("content-type") ?? "";
         const responseText = await response.text();
         const isJson = contentType.includes("application/json");
         if (!isJson) {
-          setLoadError("API route not configured. Expected a JSON response from /api/elestrals/search.");
+          setLoadError(
+            "API route not configured. Expected a JSON response from the Elestrals API search endpoint.",
+          );
           setCards([]);
           setTotalCards(0);
           return;
