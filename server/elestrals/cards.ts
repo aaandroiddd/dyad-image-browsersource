@@ -23,17 +23,14 @@ interface SnapshotPayload {
 
 const SNAPSHOT_PATH = path.resolve(process.cwd(), "server/data/elestrals-cards-snapshot.json");
 
-const CARD_SOURCES: Record<CacheKey, { url: string; type: "json" | "html" }[]> = {
+const CARD_SOURCES: Record<CacheKey, { url: string; type: "json" }[]> = {
   base: [
     { url: "https://collect.elestrals.com/api/cards?base_card=true", type: "json" },
-    { url: "https://collect.elestrals.com/cards?base_card=true", type: "html" },
     { url: "https://collect.elestrals.com/cards.json", type: "json" },
     { url: "https://collect.elestrals.com/api/cards", type: "json" },
-    { url: "https://collect.elestrals.com/cards", type: "html" },
   ],
   all: [
     { url: "https://collect.elestrals.com/api/cards", type: "json" },
-    { url: "https://collect.elestrals.com/cards", type: "html" },
     { url: "https://collect.elestrals.com/cards.json", type: "json" },
   ],
 };
@@ -133,25 +130,6 @@ const deepCollectCards = (payload: unknown) => {
   return results;
 };
 
-const parseHtmlForJson = (html: string) => {
-  const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (nextDataMatch?.[1]) {
-    return JSON.parse(nextDataMatch[1]);
-  }
-
-  const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
-  if (stateMatch?.[1]) {
-    return JSON.parse(stateMatch[1]);
-  }
-
-  const preloadedMatch = html.match(/__PRELOADED_STATE__\s*=\s*({[\s\S]*?});/);
-  if (preloadedMatch?.[1]) {
-    return JSON.parse(preloadedMatch[1]);
-  }
-
-  return null;
-};
-
 const fetchCardsFromJson = async (url: string) => {
   const response = await fetch(url);
   if (!response.ok) {
@@ -162,22 +140,6 @@ const fetchCardsFromJson = async (url: string) => {
   if (fromKnown.length) return fromKnown;
   const fromDeep = deepCollectCards(payload);
   if (fromDeep.length) return fromDeep;
-  return [];
-};
-
-const fetchCardsFromHtml = async (url: string) => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url} (status ${response.status}${response.statusText ? ` ${response.statusText}` : ""})`);
-  }
-  const html = await response.text();
-  const payload = parseHtmlForJson(html);
-  if (payload) {
-    const fromKnown = collectCardsFromObject(payload);
-    if (fromKnown.length) return fromKnown;
-    const fromDeep = deepCollectCards(payload);
-    if (fromDeep.length) return fromDeep;
-  }
   return [];
 };
 
@@ -254,10 +216,7 @@ export const fetchCardsFromSources = async (cacheKey: CacheKey) => {
   const errors: string[] = [];
   for (const source of CARD_SOURCES[cacheKey]) {
     try {
-      const cards =
-        source.type === "json"
-          ? await fetchCardsFromJson(source.url)
-          : await fetchCardsFromHtml(source.url);
+      const cards = await fetchCardsFromJson(source.url);
       if (cards.length) {
         return { cards: dedupeCards(cards), source: source.url, errors };
       }

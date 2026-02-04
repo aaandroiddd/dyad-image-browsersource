@@ -70,7 +70,7 @@ const Elestrals = () => {
         const responseText = await response.text();
         const isJson = contentType.includes("application/json");
         if (!isJson) {
-          setLoadError("API route not configured. Expected JSON response from /api/elestrals/search.");
+          setLoadError("API route not configured. Expected JSON response from the local /api/elestrals/search index.");
           setCards([]);
           setTotalCards(0);
           return;
@@ -79,14 +79,14 @@ const Elestrals = () => {
         const payload = parseCardPayload(responseText);
         if (!response.ok) {
           const details = payload && "error" in payload ? `: ${(payload as { error?: string }).error}` : "";
-          setLoadError(`Unable to load card data (status ${response.status}${details}).`);
+          setLoadError(`Unable to load card data (status ${response.status}${details}). Check the local index ingestion job.`);
           setCards([]);
           setTotalCards(0);
           return;
         }
         if (!payload || !Array.isArray(payload.cards)) {
           const fallbackMessage = payload && "error" in payload ? String((payload as { error?: string }).error) : null;
-          setLoadError(fallbackMessage || "Card data was unavailable. Please try again later.");
+          setLoadError(fallbackMessage || "Card data was unavailable. Please try again later after ingesting the local index.");
           setCards([]);
           setTotalCards(0);
           return;
@@ -98,7 +98,7 @@ const Elestrals = () => {
           return;
         }
         console.error("Failed to load cards:", error);
-        setLoadError("Unable to load card data. Ensure the Elestrals API route is configured.");
+        setLoadError("Unable to load card data. Ensure the local index and Elestrals API route are configured.");
         setCards([]);
         setTotalCards(0);
       } finally {

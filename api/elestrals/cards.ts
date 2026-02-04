@@ -37,7 +37,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  if (wantsRefresh || dataset.cards.length === 0) {
+  if (wantsRefresh) {
     const { cards, source, errors } = await refreshSnapshot(cacheKey, remoteAllowed);
     if (cards.length) {
       res.setHeader("Content-Type", "application/json");
@@ -72,8 +72,21 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify({
-        error: remoteAllowed ? "Unable to fetch card data." : "Remote fetch disabled and no snapshot available.",
+        error: remoteAllowed
+          ? "Unable to fetch card data."
+          : "Remote fetch disabled. Run the ingestion job to build the local index.",
         details: errors,
+      }),
+    );
+    return;
+  }
+
+  if (!dataset.cards.length) {
+    res.statusCode = 503;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        error: "Card snapshot not available. Run the ingestion job to build the local index.",
       }),
     );
     return;
