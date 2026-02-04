@@ -35,16 +35,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const snapshot = await readSnapshot();
   const initialDataset = snapshot.datasets[cacheKey];
-  const dataset =
-    wantsRefresh || initialDataset.cards.length === 0
-      ? await (async () => {
-          const { cards } = await refreshSnapshot(cacheKey, remoteAllowed);
-          if (cards.length) {
-            return { updatedAt: Date.now(), cards };
-          }
-          return initialDataset;
-        })()
-      : initialDataset;
+  let dataset = initialDataset;
+  let refreshErrors: string[] = [];
+
+  if (wantsRefresh || initialDataset.cards.length === 0) {
+    const { cards, errors } = await refreshSnapshot(cacheKey, remoteAllowed);
+    refreshErrors = errors;
+    if (cards.length) {
+      dataset = { updatedAt: Date.now(), cards };
+    }
+  }
+
   if (!dataset.cards.length) {
     res.statusCode = remoteAllowed ? 502 : 503;
     res.setHeader("Content-Type", "application/json");
@@ -53,6 +54,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         error: remoteAllowed
           ? "Unable to fetch card data."
           : "Card snapshot not available. Refresh the dataset via /api/elestrals/cards.",
+        details: refreshErrors.length ? refreshErrors : undefined,
       }),
     );
     return;
