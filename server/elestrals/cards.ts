@@ -23,15 +23,19 @@ interface SnapshotPayload {
 
 const SNAPSHOT_PATH = path.resolve(process.cwd(), "server/data/elestrals-cards-snapshot.json");
 
-const CARD_SOURCES: Record<CacheKey, { url: string; type: "json" }[]> = {
+type CardSource = { url: string; type: "json" | "html" };
+
+const CARD_SOURCES: Record<CacheKey, CardSource[]> = {
   base: [
     { url: "https://collect.elestrals.com/api/cards?base_card=true", type: "json" },
     { url: "https://collect.elestrals.com/cards.json", type: "json" },
     { url: "https://collect.elestrals.com/api/cards", type: "json" },
+    { url: "https://collect.elestrals.com/cards?base_card=true", type: "html" },
   ],
   all: [
     { url: "https://collect.elestrals.com/api/cards", type: "json" },
     { url: "https://collect.elestrals.com/cards.json", type: "json" },
+    { url: "https://collect.elestrals.com/cards", type: "html" },
   ],
 };
 
@@ -130,16 +134,77 @@ const deepCollectCards = (payload: unknown) => {
   return results;
 };
 
-const fetchCardsFromJson = async (url: string) => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url} (status ${response.status}${response.statusText ? ` ${response.statusText}` : ""})`);
+const defaultHeaders = {
+  "user-agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  accept: "application/json, text/html;q=0.9,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
+  "cache-control": "no-cache",
+  pragma: "no-cache",
+  referer: "https://collect.elestrals.com/",
+};
+
+const fetchWithHeaders = async (url: string) => fetch(url, { headers: defaultHeaders });
+
+const safeJsonParse = (value: string) => {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
   }
-  const payload = await response.json();
+};
+
+const collectCardsFromPayload = (payload: unknown) => {
   const fromKnown = collectCardsFromObject(payload);
   if (fromKnown.length) return fromKnown;
   const fromDeep = deepCollectCards(payload);
   if (fromDeep.length) return fromDeep;
+  return [];
+};
+
+const extractJsonFromHtml = (html: string) => {
+  const candidates: unknown[] = [];
+  const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
+  if (nextDataMatch?.[1]) {
+    const parsed = safeJsonParse(nextDataMatch[1]);
+    if (parsed) candidates.push(parsed);
+  }
+
+  const nuxtMatch = html.match(/window\.__NUXT__=([\s\S]*?);<\/script>/);
+  if (nuxtMatch?.[1]) {
+    const parsed = safeJsonParse(nuxtMatch[1]);
+    if (parsed) candidates.push(parsed);
+  }
+
+  const jsonScriptMatches = html.matchAll(/<script[^>]*type="application\/json"[^>]*>(.*?)<\/script>/gs);
+  for (const match of jsonScriptMatches) {
+    if (match[1]) {
+      const parsed = safeJsonParse(match[1]);
+      if (parsed) candidates.push(parsed);
+    }
+  }
+
+  return candidates;
+};
+
+const fetchCardsFromJson = async (url: string) => {
+  const response = await fetchWithHeaders(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url} (status ${response.status}${response.statusText ? ` ${response.statusText}` : ""})`);
+  }
+  const payload = await response.json();
+  return collectCardsFromPayload(payload);
+};
+
+const fetchCardsFromHtml = async (url: string) => {
+  const response = await fetchWithHeaders(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url} (status ${response.status}${response.statusText ? ` ${response.statusText}` : ""})`);
+  }
+  const html = await response.text();
+  const candidates = extractJsonFromHtml(html);
+  const cards = candidates.flatMap((candidate) => collectCardsFromPayload(candidate));
+  if (cards.length) return cards;
   return [];
 };
 
@@ -216,7 +281,8 @@ export const fetchCardsFromSources = async (cacheKey: CacheKey) => {
   const errors: string[] = [];
   for (const source of CARD_SOURCES[cacheKey]) {
     try {
-      const cards = await fetchCardsFromJson(source.url);
+      const cards =
+        source.type === "html" ? await fetchCardsFromHtml(source.url) : await fetchCardsFromJson(source.url);
       if (cards.length) {
         return { cards: dedupeCards(cards), source: source.url, errors };
       }
