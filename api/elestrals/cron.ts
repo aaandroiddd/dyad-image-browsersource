@@ -1,7 +1,7 @@
 /* eslint-env node */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import { readSnapshot, refreshSnapshot } from "../../server/elestrals/cards";
+import { readSnapshot, refreshSnapshot } from "../../server/elestrals/cards.js";
 
 const parseBooleanParam = (value?: string | null) =>
   value ? !["0", "false", "no"].includes(value.toLowerCase()) : true;
