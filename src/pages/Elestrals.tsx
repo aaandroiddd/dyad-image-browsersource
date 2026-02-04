@@ -41,6 +41,141 @@ const parseCardPayload = (rawText: string) => {
   }
 };
 
+const normalizeValue = (value?: string | number | null) =>
+  value === null || value === undefined ? undefined : String(value).trim();
+
+const buildCard = (raw: Record<string, unknown>, fallbackId: string): ElestralsCard | null => {
+  const name =
+    normalizeValue(raw.name as string) ??
+    normalizeValue(raw.cardName as string) ??
+    normalizeValue(raw.title as string);
+  const imageUrl =
+    normalizeValue(raw.imageUrl as string) ??
+    normalizeValue(raw.image_url as string) ??
+    normalizeValue(raw.image as string) ??
+    normalizeValue(raw.img as string) ??
+    normalizeValue(raw.cardImage as string);
+  if (!name || !imageUrl) return null;
+
+  const setNumber =
+    normalizeValue(raw.setNumber as string) ??
+    normalizeValue(raw.set_number as string) ??
+    normalizeValue(raw.cardNumber as string) ??
+    normalizeValue(raw.number as string) ??
+    normalizeValue(raw.set as string);
+  const info =
+    normalizeValue(raw.info as string) ??
+    normalizeValue(raw.text as string) ??
+    normalizeValue(raw.description as string) ??
+    normalizeValue(raw.effect as string);
+  const id =
+    normalizeValue(raw.id as string) ??
+    normalizeValue(raw.slug as string) ??
+    normalizeValue(raw.uuid as string) ??
+    `${name}-${setNumber ?? fallbackId}`;
+
+  return {
+    id,
+    name,
+    imageUrl,
+    setNumber: setNumber || undefined,
+    info: info || undefined,
+  };
+};
+
+const collectCardsFromArray = (items: unknown[]) =>
+  items
+    .map((item, index) => (item && typeof item === "object" ? buildCard(item as Record<string, unknown>, `${index}`) : null))
+    .filter((card): card is ElestralsCard => Boolean(card));
+
+const collectCardsFromObject = (payload: unknown) => {
+  if (!payload || typeof payload !== "object") return [];
+  const possibleArrays: unknown[] = [];
+  const record = payload as Record<string, unknown>;
+  const keys = ["cards", "data", "items", "results"];
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      possibleArrays.push(...value);
+    }
+  }
+  if (possibleArrays.length > 0) {
+    return collectCardsFromArray(possibleArrays);
+  }
+  return [];
+};
+
+const deepCollectCards = (payload: unknown) => {
+  const results: ElestralsCard[] = [];
+  const visited = new Set<unknown>();
+
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        visit(item);
+      }
+      return;
+    }
+
+    const record = value as Record<string, unknown>;
+    const card = buildCard(record, `${results.length}`);
+    if (card) {
+      results.push(card);
+    }
+
+    for (const child of Object.values(record)) {
+      visit(child);
+    }
+  };
+
+  visit(payload);
+  return results;
+};
+
+const parseHtmlForJson = (html: string) => {
+  const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (nextDataMatch?.[1]) {
+    return JSON.parse(nextDataMatch[1]);
+  }
+
+  const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
+  if (stateMatch?.[1]) {
+    return JSON.parse(stateMatch[1]);
+  }
+
+  const preloadedMatch = html.match(/__PRELOADED_STATE__\s*=\s*({[\s\S]*?});/);
+  if (preloadedMatch?.[1]) {
+    return JSON.parse(preloadedMatch[1]);
+  }
+
+  return null;
+};
+
+const extractCardsFromPayload = (payload: unknown) => {
+  const fromKnown = collectCardsFromObject(payload);
+  if (fromKnown.length) return fromKnown;
+  const fromDeep = deepCollectCards(payload);
+  if (fromDeep.length) return fromDeep;
+  return [];
+};
+
+const fetchFallbackCards = async () => {
+  const response = await fetch("https://www.topelestrals.com/cards");
+  if (!response.ok) {
+    throw new Error(`Fallback source unavailable (status ${response.status}).`);
+  }
+  const rawText = await response.text();
+  const payload = parseCardPayload(rawText) ?? parseHtmlForJson(rawText);
+  if (!payload) {
+    return [];
+  }
+  return extractCardsFromPayload(payload);
+};
+
 const Elestrals = () => {
   const sb = supabase;
   const { toast } = useToast();
@@ -52,6 +187,7 @@ const Elestrals = () => {
   const [sourceData, setSourceData] = useState<SourceData>({ imageUrl: null, isRevealed: false });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [fallbackCards, setFallbackCards] = useState<ElestralsCard[] | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -69,37 +205,52 @@ const Elestrals = () => {
         const contentType = response.headers.get("content-type") ?? "";
         const responseText = await response.text();
         const isJson = contentType.includes("application/json");
-        if (!isJson) {
+        if (isJson) {
+          const payload = parseCardPayload(responseText);
+          if (!response.ok) {
+            const details = payload && "error" in payload ? `: ${(payload as { error?: string }).error}` : "";
+            setLoadError(`Unable to load card data (status ${response.status}${details}).`);
+            setCards([]);
+            setTotalCards(0);
+            return;
+          }
+          if (!payload || !Array.isArray(payload.cards)) {
+            const fallbackMessage = payload && "error" in payload ? String((payload as { error?: string }).error) : null;
+            setLoadError(fallbackMessage || "Card data was unavailable. Please try again later.");
+            setCards([]);
+            setTotalCards(0);
+            return;
+          }
+          setCards(payload.cards);
+          setTotalCards(typeof payload.total === "number" ? payload.total : payload.cards.length);
+          return;
+        }
+
+        const cachedFallback = fallbackCards ?? (await fetchFallbackCards());
+        if (!fallbackCards) {
+          setFallbackCards(cachedFallback);
+        }
+        if (cachedFallback.length === 0) {
           setLoadError(
-            "API route not configured. Expected a JSON response from the Elestrals API search endpoint.",
+            "API route not configured. Unable to read card data from https://www.topelestrals.com/cards.",
           );
           setCards([]);
           setTotalCards(0);
           return;
         }
-        const payload = parseCardPayload(responseText);
-        if (!response.ok) {
-          const details = payload && "error" in payload ? `: ${(payload as { error?: string }).error}` : "";
-          setLoadError(`Unable to load card data (status ${response.status}${details}).`);
-          setCards([]);
-          setTotalCards(0);
-          return;
-        }
-        if (!payload || !Array.isArray(payload.cards)) {
-          const fallbackMessage = payload && "error" in payload ? String((payload as { error?: string }).error) : null;
-          setLoadError(fallbackMessage || "Card data was unavailable. Please try again later.");
-          setCards([]);
-          setTotalCards(0);
-          return;
-        }
-        setCards(payload.cards);
-        setTotalCards(typeof payload.total === "number" ? payload.total : payload.cards.length);
+        const filteredCards = normalizedQuery
+          ? cachedFallback.filter((card) => normalize(card.name).includes(normalizedQuery))
+          : cachedFallback;
+        setCards(filteredCards.slice(0, PAGE_SIZE));
+        setTotalCards(filteredCards.length);
       } catch (error) {
         if ((error as Error).name === "AbortError") {
           return;
         }
         console.error("Failed to load cards:", error);
-        setLoadError("Unable to load card data. Please try again later.");
+        setLoadError(
+          "Unable to load card data. Ensure the Elestrals API route is configured or allow access to https://www.topelestrals.com/cards.",
+        );
         setCards([]);
         setTotalCards(0);
       } finally {
