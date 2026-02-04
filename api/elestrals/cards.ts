@@ -152,7 +152,7 @@ const parseHtmlForJson = (html: string) => {
 const fetchCardsFromJson = async (url: string) => {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}`);
+    throw new Error(`Failed to fetch ${url} (status ${response.status}${response.statusText ? ` ${response.statusText}` : ""})`);
   }
   const payload = await response.json();
   const fromKnown = collectCardsFromObject(payload);
@@ -165,7 +165,7 @@ const fetchCardsFromJson = async (url: string) => {
 const fetchCardsFromHtml = async (url: string) => {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}`);
+    throw new Error(`Failed to fetch ${url} (status ${response.status}${response.statusText ? ` ${response.statusText}` : ""})`);
   }
   const html = await response.text();
   const payload = parseHtmlForJson(html);
@@ -240,8 +240,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           : await fetchCardsFromHtml(source.url);
       if (cards.length) {
         const deduped = dedupeCards(cards);
-        cache.cards = deduped;
-        cache.timestamp = now;
+        cache[cacheKey].cards = deduped;
+        cache[cacheKey].timestamp = now;
         await writeSnapshot(deduped);
         res.setHeader("Content-Type", "application/json");
         res.statusCode = 200;
