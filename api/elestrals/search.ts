@@ -38,7 +38,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   let dataset = initialDataset;
   let refreshErrors: string[] = [];
 
-  if (wantsRefresh || initialDataset.cards.length === 0) {
+  if (wantsRefresh) {
     const { cards, errors } = await refreshSnapshot(cacheKey, remoteAllowed);
     refreshErrors = errors;
     if (cards.length) {
@@ -47,13 +47,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   if (!dataset.cards.length) {
-    res.statusCode = remoteAllowed ? 502 : 503;
+    res.statusCode = wantsRefresh && remoteAllowed ? 502 : 503;
     res.setHeader("Content-Type", "application/json");
     res.end(
       JSON.stringify({
-        error: remoteAllowed
-          ? "Unable to fetch card data."
-          : "Card snapshot not available. Refresh the dataset via /api/elestrals/cards.",
+        error: wantsRefresh
+          ? remoteAllowed
+            ? "Unable to fetch card data."
+            : "Remote fetch disabled. Run the ingestion job to build the local index."
+          : "Card snapshot not available. Run the ingestion job to build the local index.",
         details: refreshErrors.length ? refreshErrors : undefined,
       }),
     );
