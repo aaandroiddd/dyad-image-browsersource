@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/lib/supabaseClient";
@@ -26,11 +26,7 @@ interface SourceData {
   isRevealed: boolean;
 }
 
-const SCORE_EXACT_MATCH = 1000;
-const SCORE_PREFIX_MATCH = 800;
-const SCORE_INCLUDES_MATCH = 500;
-const SCORE_FUZZY_MATCH = 200;
-const MAX_RESULTS = 50;
+const PAGE_SIZE = 50;
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
@@ -44,41 +40,11 @@ const parseCardPayload = (rawText: string) => {
   }
 };
 
-const getFuzzyScore = (name: string, query: string) => {
-  let nameIndex = 0;
-  let queryIndex = 0;
-  let gaps = 0;
-  while (nameIndex < name.length && queryIndex < query.length) {
-    if (name[nameIndex] === query[queryIndex]) {
-      queryIndex += 1;
-    } else {
-      gaps += 1;
-    }
-    nameIndex += 1;
-  }
-  if (queryIndex !== query.length) return 0;
-  const ratio = query.length / name.length;
-  return SCORE_FUZZY_MATCH + Math.round(ratio * 100) - gaps;
-};
-
-const scoreCard = (cardName: string, query: string) => {
-  if (!query) return 0;
-  const name = normalize(cardName);
-  if (name === query) return SCORE_EXACT_MATCH;
-  if (name.startsWith(query)) {
-    return SCORE_PREFIX_MATCH + Math.max(0, 50 - (name.length - query.length));
-  }
-  const index = name.indexOf(query);
-  if (index >= 0) {
-    return SCORE_INCLUDES_MATCH - index;
-  }
-  return getFuzzyScore(name, query);
-};
-
 const Elestrals = () => {
   const sb = supabase;
   const { toast } = useToast();
   const [cards, setCards] = useState<ElestralsCard[]>([]);
+  const [totalCards, setTotalCards] = useState(0);
   const [query, setQuery] = useState("");
   const [selectedCard, setSelectedCard] = useState<ElestralsCard | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -87,80 +53,62 @@ const Elestrals = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
     const loadCards = async () => {
       setIsLoading(true);
       setLoadError(null);
       try {
-        const response = await fetch("/api/elestrals/cards");
+        const normalizedQuery = normalize(query);
+        const params = new URLSearchParams({
+          q: normalizedQuery,
+          page: "1",
+          pageSize: `${PAGE_SIZE}`,
+        });
+        const response = await fetch(`/api/elestrals/search?${params.toString()}`, { signal: controller.signal });
         const contentType = response.headers.get("content-type") ?? "";
         const responseText = await response.text();
         const isJson = contentType.includes("application/json");
         if (!isJson) {
-          if (isMounted) {
-            setLoadError("API route not configured. Expected a JSON response from /api/elestrals/cards.");
-            setCards([]);
-          }
+          setLoadError("API route not configured. Expected a JSON response from /api/elestrals/search.");
+          setCards([]);
+          setTotalCards(0);
           return;
         }
         const payload = parseCardPayload(responseText);
         if (!response.ok) {
-          const details = payload && "details" in payload ? `: ${(payload as { details?: string }).details}` : "";
-          if (isMounted) {
-            setLoadError(`Unable to load card data (status ${response.status}${details}).`);
-            setCards([]);
-          }
+          const details = payload && "error" in payload ? `: ${(payload as { error?: string }).error}` : "";
+          setLoadError(`Unable to load card data (status ${response.status}${details}).`);
+          setCards([]);
+          setTotalCards(0);
           return;
         }
         if (!payload || !Array.isArray(payload.cards)) {
           const fallbackMessage = payload && "error" in payload ? String((payload as { error?: string }).error) : null;
-          if (isMounted) {
-            setLoadError(fallbackMessage || "Card data was unavailable. Please try again later.");
-            setCards([]);
-          }
+          setLoadError(fallbackMessage || "Card data was unavailable. Please try again later.");
+          setCards([]);
+          setTotalCards(0);
           return;
         }
-        if (isMounted) {
-          setCards(payload.cards);
-        }
+        setCards(payload.cards);
+        setTotalCards(typeof payload.total === "number" ? payload.total : payload.cards.length);
       } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          return;
+        }
         console.error("Failed to load cards:", error);
-        if (isMounted) {
-          setLoadError("Unable to load card data. Please try again later.");
-        }
+        setLoadError("Unable to load card data. Please try again later.");
+        setCards([]);
+        setTotalCards(0);
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 
-    loadCards();
+    void loadCards();
     return () => {
-      isMounted = false;
+      controller.abort();
     };
-  }, []);
-
-  const results = useMemo(() => {
-    const normalizedQuery = normalize(query);
-    if (!normalizedQuery) {
-      return cards.slice(0, MAX_RESULTS);
-    }
-    return cards
-      .map((card) => ({
-        card,
-        score: scoreCard(card.name, normalizedQuery),
-      }))
-      .filter((result) => result.score > 0)
-      .sort((a, b) => {
-        if (b.score === a.score) {
-          return a.card.name.localeCompare(b.card.name);
-        }
-        return b.score - a.score;
-      })
-      .slice(0, MAX_RESULTS)
-      .map((result) => result.card);
-  }, [cards, query]);
+  }, [query]);
 
   if (!sb) {
     return (
@@ -270,7 +218,7 @@ const Elestrals = () => {
                   />
                 </div>
                 <Badge variant="secondary" className="self-center">
-                  {cards.length} cards
+                  {totalCards} cards
                 </Badge>
               </div>
               {loadError && <p className="text-sm text-destructive">{loadError}</p>}
@@ -281,17 +229,17 @@ const Elestrals = () => {
               <Card className="bg-muted/20 border border-primary/30">
                 <CardHeader>
                   <CardTitle className="text-lg">Search results</CardTitle>
-                  <CardDescription>Exact matches appear first, followed by fuzzy matches.</CardDescription>
+                  <CardDescription>Results are filtered server-side by your search query.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <ScrollArea className="h-[320px] pr-2">
                     <div className="space-y-2">
-                      {!isLoading && results.length === 0 && (
+                      {!isLoading && cards.length === 0 && (
                         <p className="text-sm text-muted-foreground">
                           No cards match that search. Try another name.
                         </p>
                       )}
-                      {results.map((card) => (
+                      {cards.map((card) => (
                         <button
                           type="button"
                           key={card.id}
