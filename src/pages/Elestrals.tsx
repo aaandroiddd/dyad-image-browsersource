@@ -50,6 +50,10 @@ const Elestrals = () => {
   const [selectedCard, setSelectedCard] = useState<ElestralsCard | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sourceData, setSourceData] = useState<SourceData>({ imageUrl: null, isRevealed: false });
+  const [baseCardOnly, setBaseCardOnly] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -220,6 +224,41 @@ const Elestrals = () => {
     });
   };
 
+  const refreshIndex = async () => {
+    setIsRefreshing(true);
+    setRefreshNote(null);
+    try {
+      const params = new URLSearchParams({
+        refresh: "1",
+        base_card: baseCardOnly ? "1" : "0",
+      });
+      const response = await fetch(`${apiBase}/elestrals/cards?${params.toString()}`);
+      const payload = parseCardPayload(await response.text());
+      if (!response.ok) {
+        const details = payload && "error" in payload ? `: ${(payload as { error?: string }).error}` : "";
+        throw new Error(`Refresh failed (status ${response.status}${details}).`);
+      }
+      const cardCount = payload && typeof payload === "object" && "cards" in payload ? (payload as { cards?: [] }).cards?.length : 0;
+      const note = cardCount ? `Fetched ${cardCount} cards.` : "Refresh complete.";
+      setRefreshNote(note);
+      toast({
+        title: "Index refreshed",
+        description: note,
+      });
+      setRefreshKey((prev) => prev + 1);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to refresh card data.";
+      setRefreshNote(message);
+      toast({
+        variant: "destructive",
+        title: "Refresh failed",
+        description: message,
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 md:p-8 relative">
       <div className="absolute top-4 right-4">
@@ -275,6 +314,54 @@ const Elestrals = () => {
               </div>
               {refreshStatus && <p className="text-xs text-muted-foreground">{refreshStatus}</p>}
             </div>
+
+            <Card className="bg-muted/20 border border-primary/30">
+              <CardHeader>
+                <CardTitle className="text-lg">Data tools</CardTitle>
+                <CardDescription>
+                  Refresh the search index or switch between base cards and the full catalog.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border border-primary/40 p-3 bg-background/70">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="base-card-switch" className="text-sm">
+                      Base cards only
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Toggle off to include variants and promo cards in the search.
+                    </p>
+                  </div>
+                  <Switch
+                    id="base-card-switch"
+                    checked={baseCardOnly}
+                    onCheckedChange={setBaseCardOnly}
+                  />
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm">Refresh index</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Runs the server-side fetch job so the search list stays current.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="border-primary text-primary hover:bg-primary/10"
+                    onClick={refreshIndex}
+                    disabled={isRefreshing}
+                  >
+                    {isRefreshing ? "Refreshing…" : "Run refresh"}
+                  </Button>
+                </div>
+                {refreshNote && <p className="text-xs text-muted-foreground">{refreshNote}</p>}
+                <div className="rounded-md border border-dashed border-primary/40 p-3 text-xs text-muted-foreground">
+                  Prefer running the ingestion script manually? Use{" "}
+                  <span className="font-mono text-foreground">node server/elestrals/ingest.mjs</span>{" "}
+                  to rebuild the snapshot locally.
+                </div>
+              </CardContent>
+            </Card>
 
             <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
               <Card className="bg-muted/20 border border-primary/30">
