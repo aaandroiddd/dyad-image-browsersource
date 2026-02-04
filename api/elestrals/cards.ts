@@ -1,7 +1,7 @@
 /* eslint-env node */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import { readSnapshot, refreshSnapshot } from "../../server/elestrals/cards.js";
+import { readSnapshot, refreshSnapshot } from "../../server/elestrals/cards";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "GET") {

@@ -1,7 +1,7 @@
 /* eslint-env node */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import { readSnapshot, refreshSnapshot } from "../../server/elestrals/cards.js";
+import { readSnapshot, refreshSnapshot } from "../../server/elestrals/cards";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
