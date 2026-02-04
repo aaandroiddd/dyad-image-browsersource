@@ -1,258 +1,7 @@
 /* eslint-env node */
 
 import type { IncomingMessage, ServerResponse } from "http";
-
-interface ElestralsCard {
-  id: string;
-  name: string;
-  imageUrl: string;
-  setNumber?: string;
-  info?: string;
-}
-
-const CACHE_TTL_MS = 1000 * 60 * 60;
-const cache: Record<"base" | "all", { timestamp: number; cards: ElestralsCard[] }> = {
-  base: { timestamp: 0, cards: [] },
-  all: { timestamp: 0, cards: [] },
-};
-const SNAPSHOT_KEY = "elestrals:cards:snapshot";
-const KV_REST_API_URL = process.env.KV_REST_API_URL;
-const KV_REST_API_TOKEN = process.env.KV_REST_API_TOKEN;
-
-const CARD_SOURCES: Record<"base" | "all", { url: string; type: "json" | "html" }[]> = {
-  base: [
-    { url: "https://collect.elestrals.com/api/cards?base_card=true", type: "json" },
-    { url: "https://collect.elestrals.com/cards?base_card=true", type: "html" },
-    { url: "https://collect.elestrals.com/cards.json", type: "json" },
-    { url: "https://collect.elestrals.com/api/cards", type: "json" },
-    { url: "https://collect.elestrals.com/cards", type: "html" },
-  ],
-  all: [
-    { url: "https://collect.elestrals.com/api/cards", type: "json" },
-    { url: "https://collect.elestrals.com/cards", type: "html" },
-    { url: "https://collect.elestrals.com/cards.json", type: "json" },
-  ],
-};
-
-const normalizeValue = (value?: string | number | null) =>
-  value === null || value === undefined ? undefined : String(value).trim();
-
-const buildCard = (raw: Record<string, unknown>, fallbackId: string): ElestralsCard | null => {
-  const name =
-    normalizeValue(raw.name as string) ??
-    normalizeValue(raw.cardName as string) ??
-    normalizeValue(raw.title as string);
-  const imageUrl =
-    normalizeValue(raw.imageUrl as string) ??
-    normalizeValue(raw.image_url as string) ??
-    normalizeValue(raw.image as string) ??
-    normalizeValue(raw.img as string) ??
-    normalizeValue(raw.cardImage as string);
-  if (!name || !imageUrl) return null;
-
-  const setNumber =
-    normalizeValue(raw.setNumber as string) ??
-    normalizeValue(raw.set_number as string) ??
-    normalizeValue(raw.cardNumber as string) ??
-    normalizeValue(raw.number as string) ??
-    normalizeValue(raw.set as string);
-  const info =
-    normalizeValue(raw.info as string) ??
-    normalizeValue(raw.text as string) ??
-    normalizeValue(raw.description as string) ??
-    normalizeValue(raw.effect as string);
-  const id =
-    normalizeValue(raw.id as string) ??
-    normalizeValue(raw.slug as string) ??
-    normalizeValue(raw.uuid as string) ??
-    `${name}-${setNumber ?? fallbackId}`;
-
-  return {
-    id,
-    name,
-    imageUrl,
-    setNumber: setNumber || undefined,
-    info: info || undefined,
-  };
-};
-
-const collectCardsFromArray = (items: unknown[]) =>
-  items
-    .map((item, index) => (item && typeof item === "object" ? buildCard(item as Record<string, unknown>, `${index}`) : null))
-    .filter((card): card is ElestralsCard => Boolean(card));
-
-const collectCardsFromObject = (payload: unknown) => {
-  if (!payload || typeof payload !== "object") return [];
-  const possibleArrays: unknown[] = [];
-  const record = payload as Record<string, unknown>;
-  const keys = ["cards", "data", "items", "results"];
-  for (const key of keys) {
-    const value = record[key];
-    if (Array.isArray(value)) {
-      possibleArrays.push(...value);
-    }
-  }
-  if (possibleArrays.length > 0) {
-    return collectCardsFromArray(possibleArrays);
-  }
-  return [];
-};
-
-const deepCollectCards = (payload: unknown) => {
-  const results: ElestralsCard[] = [];
-  const visited = new Set<unknown>();
-
-  const visit = (value: unknown) => {
-    if (!value || typeof value !== "object") return;
-    if (visited.has(value)) return;
-    visited.add(value);
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        visit(item);
-      }
-      return;
-    }
-
-    const record = value as Record<string, unknown>;
-    const card = buildCard(record, `${results.length}`);
-    if (card) {
-      results.push(card);
-    }
-
-    for (const child of Object.values(record)) {
-      visit(child);
-    }
-  };
-
-  visit(payload);
-  return results;
-};
-
-const parseHtmlForJson = (html: string) => {
-  const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (nextDataMatch?.[1]) {
-    return JSON.parse(nextDataMatch[1]);
-  }
-
-  const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
-  if (stateMatch?.[1]) {
-    return JSON.parse(stateMatch[1]);
-  }
-
-  const preloadedMatch = html.match(/__PRELOADED_STATE__\s*=\s*({[\s\S]*?});/);
-  if (preloadedMatch?.[1]) {
-    return JSON.parse(preloadedMatch[1]);
-  }
-
-  return null;
-};
-
-const fetchCardsFromJson = async (url: string) => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url} (status ${response.status}${response.statusText ? ` ${response.statusText}` : ""})`);
-  }
-  const payload = await response.json();
-  const fromKnown = collectCardsFromObject(payload);
-  if (fromKnown.length) return fromKnown;
-  const fromDeep = deepCollectCards(payload);
-  if (fromDeep.length) return fromDeep;
-  return [];
-};
-
-const fetchCardsFromHtml = async (url: string) => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url} (status ${response.status}${response.statusText ? ` ${response.statusText}` : ""})`);
-  }
-  const html = await response.text();
-  const payload = parseHtmlForJson(html);
-  if (payload) {
-    const fromKnown = collectCardsFromObject(payload);
-    if (fromKnown.length) return fromKnown;
-    const fromDeep = deepCollectCards(payload);
-    if (fromDeep.length) return fromDeep;
-  }
-  return [];
-};
-
-const dedupeCards = (cards: ElestralsCard[]) => {
-  const seen = new Set<string>();
-  return cards.filter((card) => {
-    const key = `${card.name}-${card.setNumber ?? ""}-${card.imageUrl}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
-const getSnapshotPayload = (cards: ElestralsCard[]) => ({
-  updatedAt: Date.now(),
-  cards: cards.map((card) => ({
-    id: card.id,
-    name: card.name,
-    imageUrl: card.imageUrl,
-    setNumber: card.setNumber,
-    info: card.info,
-  })),
-});
-
-const readSnapshot = async () => {
-  if (!KV_REST_API_URL || !KV_REST_API_TOKEN) {
-    return { updatedAt: 0, cards: [] };
-  }
-
-  try {
-    const response = await fetch(`${KV_REST_API_URL}/get/${encodeURIComponent(SNAPSHOT_KEY)}`, {
-      headers: {
-        Authorization: `Bearer ${KV_REST_API_TOKEN}`,
-      },
-    });
-
-    if (!response.ok) {
-      return { updatedAt: 0, cards: [] };
-    }
-
-    const payload = (await response.json()) as { result?: string | null };
-    if (!payload?.result) {
-      return { updatedAt: 0, cards: [] };
-    }
-
-    const parsed = JSON.parse(payload.result) as { updatedAt?: number; cards?: ElestralsCard[] };
-    return {
-      updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
-      cards: Array.isArray(parsed.cards) ? parsed.cards : [],
-    };
-  } catch (error) {
-    return { updatedAt: 0, cards: [] };
-  }
-};
-
-const writeSnapshot = async (cards: ElestralsCard[]) => {
-  if (!KV_REST_API_URL || !KV_REST_API_TOKEN) {
-    return;
-  }
-
-  const payload = JSON.stringify(getSnapshotPayload(cards));
-  try {
-    const response = await fetch(
-      `${KV_REST_API_URL}/set/${encodeURIComponent(SNAPSHOT_KEY)}/${encodeURIComponent(payload)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${KV_REST_API_TOKEN}`,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to persist snapshot (status ${response.status})`);
-    }
-  } catch (error) {
-    // Snapshot persistence should not block serving fresh data.
-  }
-};
+import { readSnapshot, refreshSnapshot } from "../../server/elestrals/cards";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "GET") {
@@ -267,54 +16,70 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     ? !["0", "false", "no"].includes(baseCardParam.toLowerCase())
     : true;
   const cacheKey: "base" | "all" = baseCardOnly ? "base" : "all";
-
-  const now = Date.now();
-  if (cache[cacheKey].cards.length && now - cache[cacheKey].timestamp < CACHE_TTL_MS) {
-    res.setHeader("Content-Type", "application/json");
-    res.statusCode = 200;
-    res.end(JSON.stringify({ cards: cache[cacheKey].cards, cached: true, baseCardOnly }));
-    return;
-  }
-
-  const errors: string[] = [];
-  for (const source of CARD_SOURCES[cacheKey]) {
-    try {
-      const cards =
-        source.type === "json"
-          ? await fetchCardsFromJson(source.url)
-          : await fetchCardsFromHtml(source.url);
-      if (cards.length) {
-        const deduped = dedupeCards(cards);
-        cache[cacheKey].cards = deduped;
-        cache[cacheKey].timestamp = now;
-        await writeSnapshot(deduped);
-        res.setHeader("Content-Type", "application/json");
-        res.statusCode = 200;
-        res.end(JSON.stringify({ cards: deduped, cached: false, source: source.url, baseCardOnly }));
-        return;
-      }
-    } catch (error) {
-      errors.push(`${source.url}: ${String(error)}`);
-    }
-  }
+  const wantsRefresh = ["1", "true", "yes"].includes((requestUrl.searchParams.get("refresh") ?? "").toLowerCase());
+  const remoteAllowed =
+    process.env.ELESTRALS_REMOTE_FETCH === "true" || process.env.NODE_ENV !== "production";
 
   const snapshot = await readSnapshot();
-  if (snapshot.cards.length) {
+  const dataset = snapshot.datasets[cacheKey];
+
+  if (!wantsRefresh && dataset.cards.length) {
     res.setHeader("Content-Type", "application/json");
     res.statusCode = 200;
     res.end(
       JSON.stringify({
-        cards: snapshot.cards,
+        cards: dataset.cards,
         cached: true,
-        stale: true,
-        snapshotUpdatedAt: snapshot.updatedAt,
-        errors,
+        baseCardOnly,
+        snapshotUpdatedAt: dataset.updatedAt,
       }),
     );
     return;
   }
 
-  res.statusCode = 502;
+  if (wantsRefresh || dataset.cards.length === 0) {
+    const { cards, source, errors } = await refreshSnapshot(cacheKey, remoteAllowed);
+    if (cards.length) {
+      res.setHeader("Content-Type", "application/json");
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          cards,
+          cached: false,
+          source,
+          baseCardOnly,
+          refreshedAt: Date.now(),
+        }),
+      );
+      return;
+    }
+    if (dataset.cards.length) {
+      res.setHeader("Content-Type", "application/json");
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          cards: dataset.cards,
+          cached: true,
+          stale: true,
+          baseCardOnly,
+          snapshotUpdatedAt: dataset.updatedAt,
+          errors,
+        }),
+      );
+      return;
+    }
+    res.statusCode = remoteAllowed ? 502 : 503;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        error: remoteAllowed ? "Unable to fetch card data." : "Remote fetch disabled and no snapshot available.",
+        details: errors,
+      }),
+    );
+    return;
+  }
+
+  res.statusCode = 200;
   res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify({ error: "Unable to fetch card data.", details: errors }));
+  res.end(JSON.stringify({ cards: dataset.cards, cached: true, baseCardOnly, snapshotUpdatedAt: dataset.updatedAt }));
 }
