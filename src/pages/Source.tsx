@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { sectionVariants } from "@/utils/animations";
 import { useParams } from "react-router-dom";
@@ -19,6 +19,7 @@ const Source = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const sb = supabase;
   const [data, setData] = useState<SourceData>({ imageUrl: null, isRevealed: false });
+  const latestRequestId = useRef(0);
 
   useEffect(() => {
     if (!sb || !sessionId) return;
@@ -26,6 +27,7 @@ const Source = () => {
     let isMounted = true;
 
     const load = async () => {
+      const requestId = ++latestRequestId.current;
       const { data, error } = await sb
         .from("sessions")
         .select("image_url, is_revealed")
@@ -35,7 +37,9 @@ const Source = () => {
         console.error("Failed to fetch session data:", error);
         return;
       }
-      if (isMounted) {
+      // Discard this response if a newer poll has already been issued, so a
+      // slow request can't resolve late and revert the UI to stale data.
+      if (isMounted && requestId === latestRequestId.current) {
         setData({
           imageUrl: data?.image_url ?? null,
           isRevealed: data?.is_revealed ?? false,

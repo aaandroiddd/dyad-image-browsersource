@@ -144,9 +144,10 @@ const Index = () => {
 
     setIsRevealed(false);
     setShouldRevealOnLoad(true);
-    await client.from("sessions").update({ is_revealed: false }).eq("id", sessionId);
-
-    await client.from("sessions").update({ image_url: newImageUrl }).eq("id", sessionId);
+    await client
+      .from("sessions")
+      .update({ image_url: newImageUrl, is_revealed: false })
+      .eq("id", sessionId);
     setImageUrl(newImageUrl);
   };
 
